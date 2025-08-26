@@ -9,7 +9,8 @@
     "client": "cd client && npm start",
     "build": "npm run install-all && cd client && npm run build",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install",
-    "vercel-build": "node build-config.js && npm run install-all && cd client && npm run build"
+    "vercel-build": "node build-config.js && npm run install-all && cd client && npm run build",
+    "start:prod": "cd server && npm start"
   },
   "keywords": ["inventory", "sales", "jewelry", "react", "nodejs"],
   "author": "Jewelry System",
