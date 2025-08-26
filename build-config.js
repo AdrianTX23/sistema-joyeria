@@ -6,8 +6,16 @@ const path = require('path');
 const envContent = `GENERATE_SOURCEMAP=false
 CI=false
 SKIP_PREFLIGHT_CHECK=true
+REACT_APP_API_URL=https://your-vercel-domain.vercel.app/api
 `;
 
-fs.writeFileSync(path.join(__dirname, 'client', '.env.production'), envContent);
+const envPath = path.join(__dirname, 'client', '.env.production');
 
-console.log('✅ Archivo .env.production creado para el build');
+try {
+  fs.writeFileSync(envPath, envContent);
+  console.log('✅ Archivo .env.production creado para el build');
+} catch (error) {
+  console.log('⚠️ No se pudo crear .env.production:', error.message);
+}
+
+console.log('✅ Configuración de build completada');

@@ -26,7 +26,7 @@ const authenticateToken = (req, res, next) => {
 
 // Middleware to check if user is administrator
 const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'administrador') {
+  if (!req.user || req.user.role !== 'administrador') {
     return res.status(403).json({ error: 'Access denied. Administrator privileges required.' });
   }
   next();

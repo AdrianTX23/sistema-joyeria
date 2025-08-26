@@ -28,7 +28,7 @@ const Products = () => {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-  }, [currentPage, searchTerm, selectedCategory, lowStockFilter]);
+  }, [currentPage, searchTerm, selectedCategory, lowStockFilter, fetchProducts]);
 
   const fetchProducts = async () => {
     try {

@@ -20,7 +20,7 @@ const Sales = () => {
 
   useEffect(() => {
     fetchSales();
-  }, [currentPage, searchTerm, startDate, endDate]);
+  }, [currentPage, searchTerm, startDate, endDate, fetchSales]);
 
   const fetchSales = async () => {
     try {

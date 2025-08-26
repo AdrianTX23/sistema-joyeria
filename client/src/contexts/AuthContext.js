@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkAuth();
-  }, []);
+  }, [state.token]);
 
   const login = async (username, password) => {
     dispatch({ type: 'LOGIN_START' });
