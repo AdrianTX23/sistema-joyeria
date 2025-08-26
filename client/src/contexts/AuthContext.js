@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import API_CONFIG from '../config/api';
 
 const AuthContext = createContext();
 
@@ -54,6 +55,11 @@ const authReducer = (state, action) => {
 
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
+
+  // Configurar axios con la URL del backend
+  useEffect(() => {
+    axios.defaults.baseURL = API_CONFIG.baseURL;
+  }, []);
 
   // Set up axios defaults
   useEffect(() => {
