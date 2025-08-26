@@ -3,8 +3,8 @@ services:
     name: sistema-joyeria
     env: node
     plan: free
-    buildCommand: npm run install-all
-    startCommand: npm run start:prod
+    buildCommand: npm run render-build
+    startCommand: npm run render-start
     envVars:
       - key: NODE_ENV
         value: production
@@ -12,3 +12,5 @@ services:
         generateValue: true
       - key: PORT
         value: 10000
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=512"
