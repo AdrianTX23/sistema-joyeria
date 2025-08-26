@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Favicon - Joyería</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        canvas {
+            border: 1px solid #ddd;
+            margin: 10px;
+        }
+        button {
+            background: #8B5CF6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #7C3AED;
+        }
+        .preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Generador de Favicon - Joyería Elegante</h1>
+        <p>Este archivo genera el favicon PNG desde el SVG del logo de joyería.</p>
+        
+        <div class="preview">
+            <div>
+                <h3>Favicon 16x16</h3>
+                <canvas id="canvas16" width="16" height="16"></canvas>
+                <br>
+                <button onclick="downloadFavicon(16)">Descargar 16x16</button>
+            </div>
+            <div>
+                <h3>Favicon 32x32</h3>
+                <canvas id="canvas32" width="32" height="32"></canvas>
+                <br>
+                <button onclick="downloadFavicon(32)">Descargar 32x32</button>
+            </div>
+            <div>
+                <h3>Favicon 48x48</h3>
+                <canvas id="canvas48" width="48" height="48"></canvas>
+                <br>
+                <button onclick="downloadFavicon(48)">Descargar 48x48</button>
+            </div>
+        </div>
+        
+        <button onclick="generateAll()">Generar Todos los Favicons</button>
+    </div>
+
+    <script>
+        // SVG del logo de joyería
+        const logoSVG = `
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Fondo circular -->
+            <circle cx="16" cy="16" r="16" fill="#F3F4F6"/>
+            
+            <!-- Anillo de joyería -->
+            <path d="M8 16C8 11.5817 11.5817 8 16 8C20.4183 8 24 11.5817 24 16C24 20.4183 20.4183 24 16 24C11.5817 24 8 20.4183 8 16Z" fill="#E5E7EB"/>
+            
+            <!-- Piedra preciosa central -->
+            <path d="M14 14L16 12L18 14L16 16L14 14Z" fill="#8B5CF6"/>
+            <path d="M14 18L16 16L18 18L16 20L14 18Z" fill="#8B5CF6"/>
+            <path d="M12 16L14 14L16 16L14 18L12 16Z" fill="#8B5CF6"/>
+            <path d="M18 16L16 14L18 12L20 14L18 16Z" fill="#8B5CF6"/>
+            
+            <!-- Brillo en la piedra -->
+            <circle cx="15" cy="15" r="1" fill="#FFFFFF" opacity="0.8"/>
+            
+            <!-- Detalles del anillo -->
+            <path d="M10 16C10 12.6863 12.6863 10 16 10C19.3137 10 22 12.6863 22 16C22 19.3137 19.3137 22 16 22C12.6863 22 10 19.3137 10 16Z" stroke="#6B7280" stroke-width="0.5" fill="none"/>
+            
+            <!-- Pequeños diamantes alrededor -->
+            <path d="M16 6L17 7L16 8L15 7L16 6Z" fill="#F59E0B"/>
+            <path d="M16 24L17 25L16 26L15 25L16 24Z" fill="#F59E0B"/>
+            <path d="M26 16L25 17L24 16L25 15L26 16Z" fill="#F59E0B"/>
+            <path d="M6 16L5 17L4 16L5 15L6 16Z" fill="#F59E0B"/>
+        </svg>`;
+
+        function drawLogo(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Crear imagen desde SVG
+            const img = new Image();
+            const svgBlob = new Blob([logoSVG], {type: 'image/svg+xml'});
+            const url = URL.createObjectURL(svgBlob);
+            
+            img.onload = function() {
+                ctx.clearRect(0, 0, size, size);
+                ctx.drawImage(img, 0, 0, size, size);
+                URL.revokeObjectURL(url);
+            };
+            
+            img.src = url;
+        }
+
+        function downloadFavicon(size) {
+            const canvas = document.getElementById(`canvas${size}`);
+            const link = document.createElement('a');
+            link.download = `favicon-${size}x${size}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        function generateAll() {
+            drawLogo('canvas16', 16);
+            drawLogo('canvas32', 32);
+            drawLogo('canvas48', 48);
+        }
+
+        // Generar favicons al cargar la página
+        window.onload = function() {
+            generateAll();
+        };
+    </script>
+</body>
+</html>

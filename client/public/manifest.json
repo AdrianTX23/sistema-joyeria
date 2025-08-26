@@ -1,0 +1,21 @@
+{
+  "short_name": "Joyería Elegante",
+  "name": "Sistema de Inventario y Ventas - Joyería Elegante",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#8B5CF6",
+  "background_color": "#F3F4F6",
+  "description": "Sistema de inventario y ventas para joyería con diseño minimalista y elegante"
+}
