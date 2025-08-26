@@ -65,11 +65,22 @@ app.get('/api/health', (req, res) => {
 
 // Serve static files from React build in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
+  // Serve static files from the React build directory
+  const buildPath = path.join(__dirname, '../client/build');
+  console.log('📁 Serving static files from:', buildPath);
+  
+  app.use(express.static(buildPath));
   
   // Handle React routing, return all requests to React app
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+    const indexPath = path.join(buildPath, 'index.html');
+    console.log('📄 Serving index.html from:', indexPath);
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error('❌ Error serving index.html:', err);
+        res.status(500).send('Error loading application');
+      }
+    });
   });
 }
 
