@@ -12,7 +12,7 @@
     "vercel-build": "node build-config.js && npm run install-all && cd client && npm run build",
     "start:prod": "cd server && npm start",
     "heroku-postbuild": "npm run install-all",
-    "start": "npm run start:prod",
+    "start": "cd server && npm start",
     "build:full": "npm run install-all && cd client && npm run build",
     "serve:full": "cd server && npm start",
     "render-build": "npm run install-all && cd client && npm run build",
