@@ -1,0 +1,32 @@
+{
+  "name": "sistema-joyeria-backend",
+  "description": "Backend API para sistema de inventario y ventas de joyería",
+  "repository": "https://github.com/AdrianTX23/sistema-joyeria",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "keywords": ["node", "express", "sqlite", "inventory", "jewelry"],
+  "env": {
+    "NODE_ENV": {
+      "description": "Environment for the application",
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "description": "Secret key for JWT tokens",
+      "generator": "secret"
+    },
+    "PORT": {
+      "description": "Port for the application",
+      "value": "10000"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  }
+}

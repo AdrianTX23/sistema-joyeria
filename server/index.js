@@ -37,7 +37,7 @@ app.use(limiter);
 // CORS configuration
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
+    ? ['https://your-netlify-app.netlify.app', 'https://your-netlify-app.netlify.app/'] 
     : ['http://localhost:3000'],
   credentials: true
 }));
