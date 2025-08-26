@@ -69,16 +69,27 @@ if (process.env.NODE_ENV === 'production') {
   const buildPath = path.join(__dirname, '../client/build');
   console.log('📁 Serving static files from:', buildPath);
   
+  // Serve static files (CSS, JS, images, etc.)
   app.use(express.static(buildPath));
   
   // Handle React routing, return all requests to React app
   app.get('*', (req, res) => {
+    console.log('🌐 Request for:', req.path);
+    
+    // Don't serve index.html for API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API route not found' });
+    }
+    
     const indexPath = path.join(buildPath, 'index.html');
     console.log('📄 Serving index.html from:', indexPath);
+    
     res.sendFile(indexPath, (err) => {
       if (err) {
         console.error('❌ Error serving index.html:', err);
         res.status(500).send('Error loading application');
+      } else {
+        console.log('✅ Successfully served index.html for:', req.path);
       }
     });
   });
