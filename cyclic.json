@@ -1,0 +1,16 @@
+{
+  "name": "sistema-joyeria",
+  "description": "Sistema de inventario y ventas para joyería",
+  "version": "1.0.0",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "npm run start:prod",
+    "build": "npm run build:full"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

@@ -1,0 +1,19 @@
+name: sistema-joyeria
+services:
+- name: web
+  source_dir: /
+  github:
+    repo: AdrianTX23/sistema-joyeria
+    branch: main
+  run_command: npm run start:prod
+  build_command: npm run build:full
+  environment_slug: node-js
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  envs:
+  - key: NODE_ENV
+    value: production
+  - key: JWT_SECRET
+    value: ${JWT_SECRET}
+  - key: PORT
+    value: "5001"
