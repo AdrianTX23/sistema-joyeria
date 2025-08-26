@@ -1,13 +1,19 @@
 {
   "version": 2,
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": "client/build",
   "builds": [
     {
       "src": "server/index.js",
       "use": "@vercel/node",
       "config": {
         "maxDuration": 30
+      }
+    },
+    {
+      "src": "client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build",
+        "buildCommand": "cd client && npm install && npm run build"
       }
     }
   ],
@@ -18,7 +24,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "client/build/$1"
     }
   ],
   "env": {
