@@ -24,7 +24,7 @@ const Users = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [currentPage, searchTerm, selectedRole, fetchUsers]);
+  }, [currentPage, searchTerm, selectedRole]);
 
   const fetchUsers = async () => {
     try {

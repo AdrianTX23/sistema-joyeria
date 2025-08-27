@@ -35,7 +35,7 @@ const Reports = () => {
 
   useEffect(() => {
     fetchReportData();
-  }, [activeTab, period, fetchReportData]);
+  }, [activeTab, period]);
 
   const fetchReportData = async () => {
     try {
