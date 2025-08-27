@@ -168,6 +168,9 @@ class BackupSystem {
   // Listar backups disponibles
   async listBackups() {
     try {
+      // Asegurar que el directorio existe
+      await this.ensureBackupDirectory();
+      
       const files = await fs.readdir(this.backupDir);
       const backupFiles = files.filter(file => file.startsWith('backup-') && file.endsWith('.sqlite.gz'));
       
@@ -195,6 +198,12 @@ class BackupSystem {
       return backups;
     } catch (error) {
       console.error(`❌ Error listando backups: ${error.message}`);
+      // Si hay error, intentar crear el directorio y retornar lista vacía
+      try {
+        await this.ensureBackupDirectory();
+      } catch (mkdirError) {
+        console.error('❌ Error creando directorio de backups:', mkdirError.message);
+      }
       return [];
     }
   }
@@ -242,6 +251,20 @@ class BackupSystem {
     } catch (error) {
       console.error(`❌ Error programando backup: ${error.message}`);
       return { success: false, error: error.message };
+    }
+  }
+
+  // Asegurar que el directorio de backups existe
+  async ensureBackupDirectory() {
+    try {
+      await fs.access(this.backupDir);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        await fs.mkdir(this.backupDir, { recursive: true });
+        console.log(`📁 Directorio de backups creado: ${this.backupDir}`);
+      } else {
+        throw error; // Lanzar error si es otro tipo de error
+      }
     }
   }
 }
