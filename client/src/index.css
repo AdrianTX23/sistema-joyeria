@@ -15,6 +15,13 @@
   * {
     @apply border-gray-200;
   }
+
+  /* Mejorar scroll en móviles */
+  @media (max-width: 1023px) {
+    body {
+      overflow-x: hidden;
+    }
+  }
 }
 
 @layer components {
@@ -53,6 +60,11 @@
   .btn-lg {
     @apply px-6 py-3 text-base;
   }
+
+  /* Botones responsivos para móvil */
+  .btn-mobile {
+    @apply w-full sm:w-auto;
+  }
   
   .input {
     @apply block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-gray-50 disabled:cursor-not-allowed;
@@ -71,15 +83,15 @@
   }
   
   .card-header {
-    @apply px-6 py-4 border-b border-gray-100;
+    @apply px-4 lg:px-6 py-4 border-b border-gray-100;
   }
   
   .card-body {
-    @apply px-6 py-4;
+    @apply px-4 lg:px-6 py-4;
   }
   
   .card-footer {
-    @apply px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-xl;
+    @apply px-4 lg:px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-xl;
   }
   
   .table {
@@ -91,7 +103,7 @@
   }
   
   .table-header-cell {
-    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+    @apply px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
   }
   
   .table-body {
@@ -103,7 +115,16 @@
   }
   
   .table-cell {
-    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+    @apply px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+  }
+
+  /* Tabla responsiva para móvil */
+  .table-responsive {
+    @apply overflow-x-auto -mx-4 lg:mx-0;
+  }
+  
+  .table-responsive .table {
+    @apply min-w-full;
   }
   
   .badge {
@@ -128,42 +149,6 @@
   
   .badge-primary {
     @apply badge bg-primary-100 text-primary-800;
-  }
-  
-  .sidebar {
-    @apply fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-large transform transition-transform duration-300 ease-in-out lg:translate-x-0;
-  }
-  
-  .sidebar-open {
-    @apply translate-x-0;
-  }
-  
-  .sidebar-closed {
-    @apply -translate-x-full lg:translate-x-0;
-  }
-  
-  .sidebar-overlay {
-    @apply fixed inset-0 z-40 bg-black bg-opacity-50 transition-opacity duration-300;
-  }
-  
-  .sidebar-overlay-open {
-    @apply opacity-100;
-  }
-  
-  .sidebar-overlay-closed {
-    @apply opacity-0 pointer-events-none;
-  }
-  
-  .main-content {
-    @apply transition-all duration-300 ease-in-out;
-  }
-  
-  .main-content-sidebar-open {
-    @apply ml-64;
-  }
-  
-  .main-content-sidebar-closed {
-    @apply ml-0 lg:ml-64;
   }
   
   .loading-spinner {
@@ -196,6 +181,59 @@
   
   .scale-in {
     @apply animate-scale-in;
+  }
+
+  /* Grid responsivo mejorado */
+  .grid-responsive {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+  }
+
+  .grid-responsive-2 {
+    @apply grid grid-cols-1 lg:grid-cols-2 gap-4;
+  }
+
+  .grid-responsive-3 {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+  }
+
+  /* Contenedores responsivos */
+  .container-responsive {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Espaciado responsivo */
+  .space-responsive {
+    @apply space-y-4 lg:space-y-6;
+  }
+
+  .space-responsive-x {
+    @apply space-x-4 lg:space-x-6;
+  }
+
+  /* Texto responsivo */
+  .text-responsive {
+    @apply text-sm lg:text-base;
+  }
+
+  .text-responsive-lg {
+    @apply text-base lg:text-lg;
+  }
+
+  .text-responsive-xl {
+    @apply text-lg lg:text-xl;
+  }
+
+  /* Padding responsivo */
+  .p-responsive {
+    @apply p-4 lg:p-6;
+  }
+
+  .px-responsive {
+    @apply px-4 lg:px-6;
+  }
+
+  .py-responsive {
+    @apply py-4 lg:py-6;
   }
 }
 
@@ -232,5 +270,37 @@
   
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+  }
+
+  /* Utilidades para móvil */
+  .mobile-only {
+    @apply block lg:hidden;
+  }
+
+  .desktop-only {
+    @apply hidden lg:block;
+  }
+
+  .tablet-only {
+    @apply hidden md:block lg:hidden;
+  }
+
+  /* Mejorar touch en móviles */
+  .touch-friendly {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Animaciones suaves */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* Sombras responsivas */
+  .shadow-soft {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  .shadow-large {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 }
