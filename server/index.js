@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const fs = require('fs');
 
 // Import routes
 const { router: authRoutes } = require('./routes/auth');
@@ -14,10 +15,41 @@ const categoryRoutes = require('./routes/categories');
 const backupRoutes = require('./routes/backup');
 
 // Import database initialization
-const { initDatabase } = require('./database/init');
+const { initDatabase, closeDatabase } = require('./database/init');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+console.log('🚀 Iniciando Sistema de Joyería...');
+console.log('📅 Fecha:', new Date().toISOString());
+console.log('🌍 Entorno:', process.env.NODE_ENV || 'development');
+console.log('🔧 Puerto:', PORT);
+
+// Verificar y crear directorios necesarios
+const dirs = [
+  './database',
+  './backups',
+  './uploads'
+];
+
+dirs.forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    console.log(`📁 Creando directorio: ${dir}`);
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+// Verificar la base de datos
+const dbPath = path.join(__dirname, 'database', 'jewelry_inventory.db');
+console.log('🗄️ Ruta de la BD:', dbPath);
+
+if (fs.existsSync(dbPath)) {
+  const stats = fs.statSync(dbPath);
+  const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
+  console.log(`💾 Base de datos existente: ${fileSizeInMB} MB`);
+} else {
+  console.log('📝 Base de datos no existe, se creará...');
+}
 
 // Security middleware
 app.use(helmet());
@@ -111,15 +143,42 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+// Manejar señales de terminación
+process.on('SIGINT', () => {
+  console.log('\n🛑 Recibida señal SIGINT, cerrando servidor...');
+  closeDatabase();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Recibida señal SIGTERM, cerrando servidor...');
+  closeDatabase();
+  process.exit(0);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Excepción no capturada:', err);
+  closeDatabase();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Promesa rechazada no manejada:', reason);
+  closeDatabase();
+  process.exit(1);
+});
+
 // Initialize database and start server
 async function startServer() {
   try {
+    console.log('🔧 Inicializando base de datos...');
     await initDatabase();
-    console.log('✅ Database initialized successfully');
+    console.log('✅ Base de datos inicializada correctamente');
     
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 API available at http://localhost:${PORT}/api`);
+      console.log('🎉 Servidor iniciado correctamente');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
