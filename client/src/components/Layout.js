@@ -14,13 +14,42 @@ import {
   User,
   ChevronDown,
   Settings,
+  Clock,
+  CheckCircle,
 } from 'lucide-react';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [sessionType, setSessionType] = useState('temporal');
   const { user, logout } = useAuth();
   const location = useLocation();
+
+  // Detectar tipo de sesión
+  useEffect(() => {
+    const checkSessionType = () => {
+      const hasSessionToken = sessionStorage.getItem('token');
+      const hasPersistentToken = localStorage.getItem('token');
+      
+      if (hasPersistentToken) {
+        setSessionType('persistente');
+      } else if (hasSessionToken) {
+        setSessionType('temporal');
+      } else {
+        setSessionType('none');
+      }
+    };
+
+    checkSessionType();
+    
+    // Verificar cada vez que cambie el storage
+    const handleStorageChange = () => {
+      checkSessionType();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Auto-close sidebar on mobile when route changes
   useEffect(() => {
@@ -174,6 +203,19 @@ const Layout = ({ children }) => {
                 <p className="text-xs text-gray-500 capitalize">
                   {user?.role}
                 </p>
+                {/* Session Type Indicator */}
+                <div className="flex items-center mt-1">
+                  {sessionType === 'persistente' ? (
+                    <CheckCircle className="w-3 h-3 text-green-500 mr-1" />
+                  ) : (
+                    <Clock className="w-3 h-3 text-orange-500 mr-1" />
+                  )}
+                  <span className={`text-xs ${
+                    sessionType === 'persistente' ? 'text-green-600' : 'text-orange-600'
+                  }`}>
+                    {sessionType === 'persistente' ? 'Sesión persistente' : 'Sesión temporal'}
+                  </span>
+                </div>
               </div>
               <button
                 onClick={logout}
@@ -225,6 +267,19 @@ const Layout = ({ children }) => {
                   <p className="text-xs text-gray-500 capitalize">
                     {user?.role}
                   </p>
+                  {/* Session Type Indicator */}
+                  <div className="flex items-center mt-1">
+                    {sessionType === 'persistente' ? (
+                      <CheckCircle className="w-3 h-3 text-green-500 mr-1" />
+                    ) : (
+                      <Clock className="w-3 h-3 text-orange-500 mr-1" />
+                    )}
+                    <span className={`text-xs ${
+                      sessionType === 'persistente' ? 'text-green-600' : 'text-orange-600'
+                    }`}>
+                      {sessionType === 'persistente' ? 'Sesión persistente' : 'Sesión temporal'}
+                    </span>
+                  </div>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${
                   userMenuOpen ? 'rotate-180' : ''
@@ -240,6 +295,22 @@ const Layout = ({ children }) => {
                     <p className="text-xs text-gray-500">
                       {user?.email}
                     </p>
+                    {/* Session Type Info */}
+                    <div className="mt-2 p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-center">
+                        {sessionType === 'persistente' ? (
+                          <CheckCircle className="w-3 h-3 text-green-500 mr-1" />
+                        ) : (
+                          <Clock className="w-3 h-3 text-orange-500 mr-1" />
+                        )}
+                        <span className="text-xs text-gray-600">
+                          {sessionType === 'persistente' 
+                            ? 'Sesión persistente - Se mantiene al cerrar el navegador'
+                            : 'Sesión temporal - Se cierra al cerrar la página'
+                          }
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <button
                     onClick={logout}
