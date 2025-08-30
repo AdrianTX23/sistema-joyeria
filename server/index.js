@@ -24,6 +24,7 @@ console.log('🚀 Iniciando Sistema de Joyería...');
 console.log('📅 Fecha:', new Date().toISOString());
 console.log('🌍 Entorno:', process.env.NODE_ENV || 'development');
 console.log('🔧 Puerto:', PORT);
+console.log('📁 Directorio actual:', __dirname);
 
 // Verificar y crear directorios necesarios
 const dirs = [
@@ -68,7 +69,7 @@ app.use(limiter);
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
+  origin: process.env.NODE_ENV === 'production'
     ? true // Allow all origins in production since frontend and backend are on same domain
     : ['http://localhost:3000'],
   credentials: true
@@ -97,9 +98,17 @@ app.get('/api/health', (req, res) => {
 
 // Serve static files from React build in production
 if (process.env.NODE_ENV === 'production') {
-  // Serve static files from the React build directory
   const buildPath = path.join(__dirname, '../client/build');
   console.log('📁 Serving static files from:', buildPath);
+  
+  // Verificar si el directorio build existe
+  if (!fs.existsSync(buildPath)) {
+    console.error('❌ Build directory not found:', buildPath);
+    console.log('📋 Available directories in client:', fs.readdirSync(path.join(__dirname, '../client')));
+  } else {
+    console.log('✅ Build directory found');
+    console.log('📋 Files in build directory:', fs.readdirSync(buildPath));
+  }
   
   // Serve static files (CSS, JS, images, etc.)
   app.use(express.static(buildPath));
@@ -115,6 +124,12 @@ if (process.env.NODE_ENV === 'production') {
     
     const indexPath = path.join(buildPath, 'index.html');
     console.log('📄 Serving index.html from:', indexPath);
+    
+    // Verificar si index.html existe
+    if (!fs.existsSync(indexPath)) {
+      console.error('❌ index.html not found:', indexPath);
+      return res.status(500).send('index.html not found');
+    }
     
     res.sendFile(indexPath, (err) => {
       if (err) {
