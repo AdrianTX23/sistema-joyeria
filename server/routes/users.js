@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const { getDatabase } = require('../database/init');
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -65,13 +65,13 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
     
     db.get(countQuery, countParams, (err, countResult) => {
       if (err) {
-        db.close();
+        console.error('Database error getting user count:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
       db.all(query, params, (err, users) => {
-        db.close();
         if (err) {
+          console.error('Database error getting users:', err);
           return res.status(500).json({ error: 'Database error' });
         }
 
@@ -102,8 +102,8 @@ router.get('/:id', authenticateToken, requireAdmin, (req, res) => {
       'SELECT id, username, email, role, full_name, created_at, updated_at FROM users WHERE id = ?',
       [id],
       (err, user) => {
-        db.close();
         if (err) {
+          console.error('Database error getting user:', err);
           return res.status(500).json({ error: 'Database error' });
         }
         if (!user) {
@@ -139,7 +139,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       [username, email, fullName, role, id],
       function(err) {
         if (err) {
-          db.close();
+          console.error('Database error updating user:', err);
           if (err.message.includes('UNIQUE constraint failed')) {
             return res.status(400).json({ error: 'Username or email already exists' });
           }
@@ -147,7 +147,6 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
         }
 
         if (this.changes === 0) {
-          db.close();
           return res.status(404).json({ error: 'User not found' });
         }
 
@@ -155,8 +154,8 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
           'SELECT id, username, email, role, full_name, created_at, updated_at FROM users WHERE id = ?',
           [id],
           (err, updatedUser) => {
-            db.close();
             if (err) {
+              console.error('Database error getting updated user:', err);
               return res.status(500).json({ error: 'Database error' });
             }
             res.json({ 
@@ -186,8 +185,8 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     const db = getDatabase();
     
     db.run('DELETE FROM users WHERE id = ?', [id], function(err) {
-      db.close();
       if (err) {
+        console.error('Database error deleting user:', err);
         return res.status(500).json({ error: 'Database error' });
       }
       if (this.changes === 0) {
@@ -218,8 +217,8 @@ router.post('/:id/reset-password', authenticateToken, requireAdmin, async (req, 
       'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [hashedPassword, id],
       function(err) {
-        db.close();
         if (err) {
+          console.error('Database error resetting password:', err);
           return res.status(500).json({ error: 'Database error' });
         }
         if (this.changes === 0) {
@@ -256,13 +255,13 @@ router.get('/stats/summary', authenticateToken, requireAdmin, (req, res) => {
 
     db.all(roleStatsQuery, (err, roleStats) => {
       if (err) {
-        db.close();
+        console.error('Database error getting role stats:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
       db.all(recentUsersQuery, (err, recentUsers) => {
-        db.close();
         if (err) {
+          console.error('Database error getting recent users:', err);
           return res.status(500).json({ error: 'Database error' });
         }
 
@@ -335,13 +334,13 @@ router.get('/:id/activity', authenticateToken, requireAdmin, (req, res) => {
 
     db.get(salesQuery, [id], (err, salesStats) => {
       if (err) {
-        db.close();
+        console.error('Database error getting sales stats:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
       db.get(movementsQuery, [id], (err, movementStats) => {
-        db.close();
         if (err) {
+          console.error('Database error getting movement stats:', err);
           return res.status(500).json({ error: 'Database error' });
         }
 
@@ -365,7 +364,5 @@ router.get('/:id/activity', authenticateToken, requireAdmin, (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
 
 module.exports = router;

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { getDatabase } = require('../database/init');
+const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ const upload = multer({
 });
 
 // Get all products with pagination and filters
-router.get('/', (req, res) => {
+router.get('/', authenticateToken, (req, res) => {
   try {
     const { page = 1, limit = 10, search = '', category = '', lowStock = false } = req.query;
     const offset = (page - 1) * limit;
@@ -75,13 +76,13 @@ router.get('/', (req, res) => {
     
     db.get(countQuery, countParams, (err, countResult) => {
       if (err) {
-        db.close();
+        console.error('Database error getting product count:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
       db.all(query, params, (err, products) => {
-        db.close();
         if (err) {
+          console.error('Database error getting products:', err);
           return res.status(500).json({ error: 'Database error' });
         }
 
@@ -102,8 +103,8 @@ router.get('/', (req, res) => {
   }
 });
 
-// Get single product by ID
-router.get('/:id', (req, res) => {
+// Get single product
+router.get('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const db = getDatabase();
@@ -115,8 +116,8 @@ router.get('/:id', (req, res) => {
        WHERE p.id = ?`,
       [id],
       (err, product) => {
-        db.close();
         if (err) {
+          console.error('Database error getting product:', err);
           return res.status(500).json({ error: 'Database error' });
         }
         if (!product) {
@@ -132,7 +133,7 @@ router.get('/:id', (req, res) => {
 });
 
 // Create new product
-router.post('/', upload.single('image'), (req, res) => {
+router.post('/', authenticateToken, (req, res) => {
   try {
     const {
       sku,
@@ -152,38 +153,21 @@ router.post('/', upload.single('image'), (req, res) => {
       return res.status(400).json({ error: 'SKU, name, price, and cost are required' });
     }
 
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
     const db = getDatabase();
-
+    
     db.run(
       `INSERT INTO products (
         sku, name, description, category_id, price, cost, 
-        stock_quantity, min_stock_level, image_url, weight, dimensions, material
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        sku, name, description, category_id || null, price, cost,
-        stock_quantity || 0, min_stock_level || 5, imageUrl, weight, dimensions, material
-      ],
+        stock_quantity, min_stock_level, weight, dimensions, material
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sku, name, description, category_id, price, cost, stock_quantity || 0, min_stock_level || 5, weight, dimensions, material],
       function(err) {
         if (err) {
-          db.close();
+          console.error('Database error creating product:', err);
           if (err.message.includes('UNIQUE constraint failed')) {
             return res.status(400).json({ error: 'SKU already exists' });
           }
           return res.status(500).json({ error: 'Database error' });
-        }
-
-        // Record initial stock movement
-        if (stock_quantity > 0) {
-          db.run(
-            `INSERT INTO stock_movements (
-              product_id, movement_type, quantity, previous_stock, new_stock, user_id, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-              this.lastID, 'initial', stock_quantity, 0, stock_quantity, 
-              req.user?.id || 1, 'Initial stock entry'
-            ]
-          );
         }
 
         db.get(
@@ -193,8 +177,8 @@ router.post('/', upload.single('image'), (req, res) => {
            WHERE p.id = ?`,
           [this.lastID],
           (err, newProduct) => {
-            db.close();
             if (err) {
+              console.error('Database error getting new product:', err);
               return res.status(500).json({ error: 'Database error' });
             }
             res.status(201).json({ 
@@ -212,7 +196,7 @@ router.post('/', upload.single('image'), (req, res) => {
 });
 
 // Update product
-router.put('/:id', upload.single('image'), (req, res) => {
+router.put('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -222,6 +206,7 @@ router.put('/:id', upload.single('image'), (req, res) => {
       category_id,
       price,
       cost,
+      stock_quantity,
       min_stock_level,
       weight,
       dimensions,
@@ -234,58 +219,45 @@ router.put('/:id', upload.single('image'), (req, res) => {
 
     const db = getDatabase();
     
-    // Get current product to check if image exists
-    db.get('SELECT image_url FROM products WHERE id = ?', [id], (err, currentProduct) => {
-      if (err) {
-        db.close();
-        return res.status(500).json({ error: 'Database error' });
-      }
-      if (!currentProduct) {
-        db.close();
-        return res.status(404).json({ error: 'Product not found' });
-      }
-
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : currentProduct.image_url;
-
-      db.run(
-        `UPDATE products SET 
-          sku = ?, name = ?, description = ?, category_id = ?, price = ?, cost = ?,
-          min_stock_level = ?, image_url = ?, weight = ?, dimensions = ?, material = ?,
-          updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [
-          sku, name, description, category_id || null, price, cost,
-          min_stock_level || 5, imageUrl, weight, dimensions, material, id
-        ],
-        function(err) {
-          if (err) {
-            db.close();
-            if (err.message.includes('UNIQUE constraint failed')) {
-              return res.status(400).json({ error: 'SKU already exists' });
-            }
-            return res.status(500).json({ error: 'Database error' });
+    db.run(
+      `UPDATE products SET 
+        sku = ?, name = ?, description = ?, category_id = ?, 
+        price = ?, cost = ?, stock_quantity = ?, min_stock_level = ?, 
+        weight = ?, dimensions = ?, material = ?, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
+      [sku, name, description, category_id, price, cost, stock_quantity, min_stock_level, weight, dimensions, material, id],
+      function(err) {
+        if (err) {
+          console.error('Database error updating product:', err);
+          if (err.message.includes('UNIQUE constraint failed')) {
+            return res.status(400).json({ error: 'SKU already exists' });
           }
-
-          db.get(
-            `SELECT p.*, c.name as category_name 
-             FROM products p 
-             LEFT JOIN categories c ON p.category_id = c.id 
-             WHERE p.id = ?`,
-            [id],
-            (err, updatedProduct) => {
-              db.close();
-              if (err) {
-                return res.status(500).json({ error: 'Database error' });
-              }
-              res.json({ 
-                message: 'Product updated successfully',
-                product: updatedProduct 
-              });
-            }
-          );
+          return res.status(500).json({ error: 'Database error' });
         }
-      );
-    });
+
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'Product not found' });
+        }
+
+        db.get(
+          `SELECT p.*, c.name as category_name 
+           FROM products p 
+           LEFT JOIN categories c ON p.category_id = c.id 
+           WHERE p.id = ?`,
+          [id],
+          (err, updatedProduct) => {
+            if (err) {
+              console.error('Database error getting updated product:', err);
+              return res.status(500).json({ error: 'Database error' });
+            }
+            res.json({ 
+              message: 'Product updated successfully',
+              product: updatedProduct 
+            });
+          }
+        );
+      }
+    );
   } catch (error) {
     console.error('Update product error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -293,72 +265,56 @@ router.put('/:id', upload.single('image'), (req, res) => {
 });
 
 // Update stock quantity
-router.patch('/:id/stock', (req, res) => {
+router.patch('/:id/stock', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
-    const { quantity, movementType = 'adjustment', notes = '' } = req.body;
+    const { quantity, type = 'adjustment', notes = '' } = req.body;
 
-    if (quantity === undefined || quantity === null) {
-      return res.status(400).json({ error: 'Quantity is required' });
+    if (typeof quantity !== 'number') {
+      return res.status(400).json({ error: 'Quantity must be a number' });
     }
 
     const db = getDatabase();
     
+    // Get current stock
     db.get('SELECT stock_quantity FROM products WHERE id = ?', [id], (err, product) => {
       if (err) {
-        db.close();
+        console.error('Database error getting product stock:', err);
         return res.status(500).json({ error: 'Database error' });
       }
       if (!product) {
-        db.close();
         return res.status(404).json({ error: 'Product not found' });
       }
 
       const previousStock = product.stock_quantity;
-      const newStock = Math.max(0, previousStock + parseInt(quantity));
+      const newStock = Math.max(0, previousStock + quantity);
 
+      // Update product stock
       db.run(
         'UPDATE products SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [newStock, id],
         function(err) {
           if (err) {
-            db.close();
+            console.error('Database error updating product stock:', err);
             return res.status(500).json({ error: 'Database error' });
           }
 
           // Record stock movement
           db.run(
-            `INSERT INTO stock_movements (
-              product_id, movement_type, quantity, previous_stock, new_stock, user_id, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-              id, movementType, quantity, previousStock, newStock, 
-              req.user?.id || 1, notes
-            ],
-            function(err) {
+            'INSERT INTO stock_movements (product_id, movement_type, quantity, previous_stock, new_stock, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, type, quantity, previousStock, newStock, req.user.id, notes],
+            (err) => {
               if (err) {
-                console.error('Error recording stock movement:', err);
+                console.error('Database error recording stock movement:', err);
+                return res.status(500).json({ error: 'Database error' });
               }
 
-              db.get(
-                'SELECT * FROM products WHERE id = ?',
-                [id],
-                (err, updatedProduct) => {
-                  db.close();
-                  if (err) {
-                    return res.status(500).json({ error: 'Database error' });
-                  }
-                  res.json({ 
-                    message: 'Stock updated successfully',
-                    product: updatedProduct,
-                    stockMovement: {
-                      previousStock,
-                      newStock,
-                      change: quantity
-                    }
-                  });
-                }
-              );
+              res.json({ 
+                message: 'Stock updated successfully',
+                previousStock,
+                newStock,
+                change: quantity
+              });
             }
           );
         }
@@ -371,14 +327,14 @@ router.patch('/:id/stock', (req, res) => {
 });
 
 // Delete product
-router.delete('/:id', (req, res) => {
+router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const db = getDatabase();
     
     db.run('DELETE FROM products WHERE id = ?', [id], function(err) {
-      db.close();
       if (err) {
+        console.error('Database error deleting product:', err);
         return res.status(500).json({ error: 'Database error' });
       }
       if (this.changes === 0) {
@@ -393,7 +349,7 @@ router.delete('/:id', (req, res) => {
 });
 
 // Get stock movements for a product
-router.get('/:id/stock-movements', (req, res) => {
+router.get('/:id/stock-movements', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const { page = 1, limit = 20 } = req.query;
@@ -410,8 +366,8 @@ router.get('/:id/stock-movements', (req, res) => {
        LIMIT ? OFFSET ?`,
       [id, parseInt(limit), offset],
       (err, movements) => {
-        db.close();
         if (err) {
+          console.error('Database error getting stock movements:', err);
           return res.status(500).json({ error: 'Database error' });
         }
         res.json({ movements });
@@ -419,6 +375,62 @@ router.get('/:id/stock-movements', (req, res) => {
     );
   } catch (error) {
     console.error('Get stock movements error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get product statistics
+router.get('/stats/summary', authenticateToken, (req, res) => {
+  try {
+    const db = getDatabase();
+    
+    // Get total products and low stock count
+    const summaryQuery = `
+      SELECT 
+        COUNT(*) as total_products,
+        SUM(stock_quantity) as total_stock,
+        SUM(CASE WHEN stock_quantity <= min_stock_level THEN 1 ELSE 0 END) as low_stock_count,
+        SUM(price * stock_quantity) as total_value
+      FROM products
+    `;
+
+    // Get products by category
+    const categoryQuery = `
+      SELECT 
+        c.name as category_name,
+        COUNT(p.id) as product_count,
+        SUM(p.stock_quantity) as total_stock
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.category_id
+      GROUP BY c.id, c.name
+      ORDER BY product_count DESC
+    `;
+
+    db.get(summaryQuery, (err, summary) => {
+      if (err) {
+        console.error('Database error getting product summary:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      db.all(categoryQuery, (err, categories) => {
+        if (err) {
+          console.error('Database error getting category stats:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        res.json({
+          summary: {
+            totalProducts: summary.total_products || 0,
+            totalStock: summary.total_stock || 0,
+            lowStockCount: summary.low_stock_count || 0,
+            totalValue: parseFloat(summary.total_value || 0).toFixed(2)
+          },
+          categories
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Product stats error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
