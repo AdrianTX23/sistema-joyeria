@@ -30,13 +30,15 @@ async function initDatabase() {
       console.log('✅ Connected to SQLite database');
     });
 
-    // Configurar la base de datos para mejor rendimiento
-    db.configure('busyTimeout', 30000);
-    db.configure('journalMode', 'WAL'); // Write-Ahead Logging para mejor concurrencia
-
+    // Configurar la base de datos para mejor rendimiento usando PRAGMA
     db.serialize(() => {
-      // Habilitar foreign keys
-      db.run('PRAGMA foreign_keys = ON');
+      // Configuraciones de rendimiento y concurrencia
+      db.run('PRAGMA journal_mode = WAL'); // Write-Ahead Logging para mejor concurrencia
+      db.run('PRAGMA busy_timeout = 30000'); // Timeout de 30 segundos
+      db.run('PRAGMA synchronous = NORMAL'); // Balance entre rendimiento y seguridad
+      db.run('PRAGMA cache_size = 10000'); // Cache de 10MB
+      db.run('PRAGMA temp_store = MEMORY'); // Tablas temporales en memoria
+      db.run('PRAGMA foreign_keys = ON'); // Habilitar foreign keys
 
       // Create users table
       db.run(`
@@ -262,9 +264,9 @@ function getDatabase() {
       }
     });
     
-    // Configurar la base de datos
-    db.configure('busyTimeout', 30000);
-    db.configure('journalMode', 'WAL');
+    // Configurar la base de datos usando PRAGMA
+    db.run('PRAGMA journal_mode = WAL');
+    db.run('PRAGMA busy_timeout = 30000');
     db.run('PRAGMA foreign_keys = ON');
   }
   return db;
