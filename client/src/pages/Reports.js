@@ -9,6 +9,7 @@ import {
   Download,
   AlertCircle,
   CheckCircle,
+  Calendar,
 } from 'lucide-react';
 import {
   LineChart,
@@ -32,10 +33,13 @@ const Reports = () => {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [reportData, setReportData] = useState({});
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [useCustomDates, setUseCustomDates] = useState(false);
 
   useEffect(() => {
     fetchReportData();
-  }, [activeTab, period]);
+  }, [activeTab, period, startDate, endDate, useCustomDates]);
 
   const fetchReportData = async () => {
     try {
@@ -44,7 +48,11 @@ const Reports = () => {
 
       switch (activeTab) {
         case 'sales':
-          const salesRes = await axios.get(`/api/reports/sales?period=${period}`);
+          let salesUrl = `/api/reports/sales?period=${period}`;
+          if (useCustomDates && startDate && endDate) {
+            salesUrl = `/api/reports/sales?startDate=${startDate}&endDate=${endDate}`;
+          }
+          const salesRes = await axios.get(salesUrl);
           data.sales = salesRes.data;
           break;
         case 'inventory':
@@ -69,6 +77,41 @@ const Reports = () => {
       toast.error('Error al cargar los datos del reporte');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDateChange = (type, value) => {
+    if (type === 'start') {
+      setStartDate(value);
+      if (value && endDate && value > endDate) {
+        setEndDate(value);
+      }
+    } else {
+      setEndDate(value);
+    }
+  };
+
+  const handlePeriodChange = (newPeriod) => {
+    setPeriod(newPeriod);
+    setUseCustomDates(false);
+    setStartDate('');
+    setEndDate('');
+  };
+
+  const handleCustomDatesToggle = () => {
+    setUseCustomDates(!useCustomDates);
+    if (!useCustomDates) {
+      // Al activar fechas personalizadas, establecer fechas por defecto
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      
+      setStartDate(thirtyDaysAgo.toISOString().split('T')[0]);
+      setEndDate(today.toISOString().split('T')[0]);
+    } else {
+      // Al desactivar, limpiar fechas
+      setStartDate('');
+      setEndDate('');
     }
   };
 
@@ -120,20 +163,19 @@ const Reports = () => {
         quarter: 'trimestre',
         year: 'año'
       };
-      const fileName = `reporte-${activeTab}-${periodNames[period] || period}-${date}.csv`;
-      
-      // Crear y descargar archivo
+      const fileName = `reporte_${activeTab}_${periodNames[period] || period}_${date}.csv`;
+
+      // Crear y descargar el archivo
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', fileName);
-      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
+      link.remove();
       
-      // Limpiar recursos
+      // Limpiar URL después de un breve delay
       setTimeout(() => {
-        document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       }, 100);
       
@@ -193,17 +235,58 @@ const Reports = () => {
           </p>
         </div>
         <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="input"
-            disabled={exporting}
-          >
-            <option value="week">Esta Semana</option>
-            <option value="month">Este Mes</option>
-            <option value="quarter">Este Trimestre</option>
-            <option value="year">Este Año</option>
-          </select>
+          {activeTab === 'sales' && (
+            <div className="flex items-center space-x-2">
+              <label className="flex items-center space-x-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={useCustomDates}
+                  onChange={handleCustomDatesToggle}
+                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span className="text-gray-700">Fechas personalizadas</span>
+              </label>
+            </div>
+          )}
+          
+          {activeTab === 'sales' && useCustomDates ? (
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => handleDateChange('start', e.target.value)}
+                  className="input text-sm"
+                  max={endDate || undefined}
+                />
+              </div>
+              <span className="text-gray-500">a</span>
+              <div className="flex items-center space-x-1">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => handleDateChange('end', e.target.value)}
+                  className="input text-sm"
+                  min={startDate || undefined}
+                />
+              </div>
+            </div>
+          ) : (
+            <select
+              value={period}
+              onChange={(e) => handlePeriodChange(e.target.value)}
+              className="input"
+              disabled={exporting}
+            >
+              <option value="week">Esta Semana</option>
+              <option value="month">Este Mes</option>
+              <option value="quarter">Este Trimestre</option>
+              <option value="year">Este Año</option>
+            </select>
+          )}
+          
           <button 
             onClick={handleExport}
             className={`btn ${exporting ? 'btn-secondary opacity-50' : 'btn-secondary'}`}
@@ -301,16 +384,65 @@ const Reports = () => {
               </div>
             </div>
 
-            {/* Export Status */}
-            {exporting && (
-              <div className="card bg-blue-50 border-blue-200">
+            {/* Sales Chart */}
+            {reportData.sales.data && reportData.sales.data.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Tendencia de Ventas</h3>
+                </div>
                 <div className="card-body">
-                  <div className="flex items-center">
-                    <div className="loading-spinner-sm mr-3" />
-                    <div>
-                      <p className="font-medium text-blue-900">Exportando reporte de ventas...</p>
-                      <p className="text-sm text-blue-700">Por favor espera mientras se genera el archivo CSV</p>
-                    </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={reportData.sales.data}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="sales" stroke="#3B82F6" strokeWidth={2} />
+                      <Line type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Sales Table */}
+            {reportData.sales.data && reportData.sales.data.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Detalle de Ventas</h3>
+                </div>
+                <div className="card-body">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Fecha
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ventas
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ingresos
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {reportData.sales.data.map((item, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {item.date}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {item.sales}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${item.revenue}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -321,14 +453,14 @@ const Reports = () => {
         {activeTab === 'inventory' && reportData.inventory && (
           <div className="space-y-6">
             {/* Inventory Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="card">
                 <div className="card-body">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">Total Productos</p>
                       <p className="text-2xl font-bold text-gray-900">
-                        {reportData.inventory.summary?.totalItems || 0}
+                        {reportData.inventory.totalProducts || 0}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -341,60 +473,60 @@ const Reports = () => {
                 <div className="card-body">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Valor Total</p>
-                      <p className="text-2xl font-bold text-success-600">
-                        ${reportData.inventory.summary?.totalValue || 0}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center">
-                      <DollarSign className="w-6 h-6 text-success-600" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-body">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Valor al Detalle</p>
-                      <p className="text-2xl font-bold text-primary-600">
-                        ${reportData.inventory.summary?.totalRetailValue || 0}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
-                      <DollarSign className="w-6 h-6 text-primary-600" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-body">
-                  <div className="flex items-center justify-between">
-                    <div>
                       <p className="text-sm font-medium text-gray-600">Stock Bajo</p>
                       <p className="text-2xl font-bold text-warning-600">
-                        {reportData.inventory.summary?.lowStockItems || 0}
+                        {reportData.inventory.lowStockProducts || 0}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-warning-100 rounded-lg flex items-center justify-center">
-                      <Package className="w-6 h-6 text-warning-600" />
+                      <AlertCircle className="w-6 h-6 text-warning-600" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="card">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Stock Agotado</p>
+                      <p className="text-2xl font-bold text-danger-600">
+                        {reportData.inventory.outOfStockProducts || 0}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-danger-100 rounded-lg flex items-center justify-center">
+                      <AlertCircle className="w-6 h-6 text-danger-600" />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Export Status */}
-            {exporting && (
-              <div className="card bg-blue-50 border-blue-200">
+            {/* Inventory Chart */}
+            {reportData.inventory.categories && reportData.inventory.categories.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Productos por Categoría</h3>
+                </div>
                 <div className="card-body">
-                  <div className="flex items-center">
-                    <div className="loading-spinner-sm mr-3" />
-                    <div>
-                      <p className="font-medium text-blue-900">Exportando inventario...</p>
-                      <p className="text-sm text-blue-700">Generando reporte completo del inventario actual</p>
-                    </div>
-                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={reportData.inventory.categories}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {reportData.inventory.categories.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             )}
@@ -403,36 +535,125 @@ const Reports = () => {
 
         {activeTab === 'products' && reportData.products && (
           <div className="space-y-6">
-            {/* Products Performance Chart */}
-            <div className="card">
-              <div className="card-header">
-                <h3 className="text-lg font-semibold text-gray-900">Rendimiento de Productos</h3>
+            {/* Products Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="card">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Productos</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {reportData.products.summary?.totalProducts || 0}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                      <Package className="w-6 h-6 text-primary-600" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="card-body">
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={reportData.products.products?.slice(0, 10) || []}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="units_sold" fill="#8B5CF6" />
-                    </BarChart>
-                  </ResponsiveContainer>
+              <div className="card">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Unidades Vendidas</p>
+                      <p className="text-2xl font-bold text-success-600">
+                        {reportData.products.summary?.totalUnitsSold || 0}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-success-600" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="card">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Ingresos Totales</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        ${reportData.products.summary?.totalRevenue || 0}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-secondary-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-6 h-6 text-secondary-600" />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Export Status */}
-            {exporting && (
-              <div className="card bg-blue-50 border-blue-200">
+            {/* Top Products Chart */}
+            {reportData.products.products && reportData.products.products.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Productos Más Vendidos</h3>
+                </div>
                 <div className="card-body">
-                  <div className="flex items-center">
-                    <div className="loading-spinner-sm mr-3" />
-                    <div>
-                      <p className="font-medium text-blue-900">Exportando reporte de productos...</p>
-                      <p className="text-sm text-blue-700">Incluyendo estadísticas de ventas y rendimiento</p>
-                    </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={reportData.products.products.slice(0, 10)}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="units_sold" fill="#3B82F6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Products Table */}
+            {reportData.products.products && reportData.products.products.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Rendimiento de Productos</h3>
+                </div>
+                <div className="card-body">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Producto
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Categoría
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Unidades Vendidas
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ingresos
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Stock Actual
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {reportData.products.products.map((product, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {product.name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {product.category_name || 'Sin categoría'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {product.units_sold}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${product.revenue}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {product.stock_quantity}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -442,76 +663,125 @@ const Reports = () => {
 
         {activeTab === 'categories' && reportData.categories && (
           <div className="space-y-6">
-            {/* Categories Performance */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Categories Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="card">
-                <div className="card-header">
-                  <h3 className="text-lg font-semibold text-gray-900">Rendimiento por Categoría</h3>
-                </div>
                 <div className="card-body">
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={reportData.categories.categories || []}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="revenue"
-                        >
-                          {(reportData.categories.categories || []).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Categorías</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {reportData.categories.summary?.totalCategories || 0}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                      <Package className="w-6 h-6 text-primary-600" />
+                    </div>
                   </div>
                 </div>
               </div>
-
               <div className="card">
-                <div className="card-header">
-                  <h3 className="text-lg font-semibold text-gray-900">Resumen por Categoría</h3>
-                </div>
                 <div className="card-body">
-                  <div className="space-y-4">
-                    {(reportData.categories.categories || []).map((category) => (
-                      <div key={category.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900">{category.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {category.product_count} productos
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-success-600">
-                            ${category.revenue}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {category.units_sold} vendidos
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Unidades Vendidas</p>
+                      <p className="text-2xl font-bold text-success-600">
+                        {reportData.categories.summary?.totalUnitsSold || 0}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-success-600" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="card">
+                <div className="card-body">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Ingresos Totales</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        ${reportData.categories.summary?.totalRevenue || 0}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-secondary-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="w-6 h-6 text-secondary-600" />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Export Status */}
-            {exporting && (
-              <div className="card bg-blue-50 border-blue-200">
+            {/* Categories Chart */}
+            {reportData.categories.categories && reportData.categories.categories.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Rendimiento por Categoría</h3>
+                </div>
                 <div className="card-body">
-                  <div className="flex items-center">
-                    <div className="loading-spinner-sm mr-3" />
-                    <div>
-                      <p className="font-medium text-blue-900">Exportando reporte de categorías...</p>
-                      <p className="text-sm text-blue-700">Incluyendo rendimiento y estadísticas por categoría</p>
-                    </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={reportData.categories.categories}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="revenue" fill="#10B981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Categories Table */}
+            {reportData.categories.categories && reportData.categories.categories.length > 0 && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Detalle por Categoría</h3>
+                </div>
+                <div className="card-body">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Categoría
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Productos
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Unidades Vendidas
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ingresos
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ventas
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {reportData.categories.categories.map((category, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {category.name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {category.product_count}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {category.units_sold}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${category.revenue}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {category.sale_count}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
