@@ -16,14 +16,28 @@ console.log('🗄️ Database path:', dbPath);
 const dbExists = fs.existsSync(dbPath);
 console.log('📁 Database exists:', dbExists);
 
-let db;
+let db = null;
+let isInitializing = false;
+let initPromise = null;
 
 async function initDatabase() {
-  return new Promise((resolve, reject) => {
+  // Si ya se está inicializando, esperar a que termine
+  if (isInitializing) {
+    return initPromise;
+  }
+
+  // Si ya está inicializada, retornar
+  if (db) {
+    return Promise.resolve();
+  }
+
+  isInitializing = true;
+  initPromise = new Promise((resolve, reject) => {
     // Crear conexión a la base de datos
     db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         console.error('❌ Error opening database:', err);
+        isInitializing = false;
         reject(err);
         return;
       }
@@ -248,26 +262,18 @@ async function initDatabase() {
         const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
         console.log(`💾 Database size: ${fileSizeInMB} MB`);
         
+        isInitializing = false;
         resolve();
       }, 1000);
     });
   });
+
+  return initPromise;
 }
 
 function getDatabase() {
   if (!db) {
-    db = new sqlite3.Database(dbPath, (err) => {
-      if (err) {
-        console.error('❌ Error opening database:', err);
-      } else {
-        console.log('✅ Database connection established');
-      }
-    });
-    
-    // Configurar la base de datos usando PRAGMA
-    db.run('PRAGMA journal_mode = WAL');
-    db.run('PRAGMA busy_timeout = 30000');
-    db.run('PRAGMA foreign_keys = ON');
+    throw new Error('Database not initialized. Call initDatabase() first.');
   }
   return db;
 }
@@ -275,13 +281,18 @@ function getDatabase() {
 // Función para cerrar la base de datos
 function closeDatabase() {
   if (db) {
-    db.close((err) => {
-      if (err) {
-        console.error('❌ Error closing database:', err);
-      } else {
-        console.log('✅ Database connection closed');
-      }
-    });
+    try {
+      db.close((err) => {
+        if (err) {
+          console.error('❌ Error closing database:', err);
+        } else {
+          console.log('✅ Database connection closed');
+          db = null;
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error in closeDatabase:', error);
+    }
   }
 }
 
