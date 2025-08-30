@@ -281,4 +281,158 @@ router.get('/export/inventory', authenticateToken, (req, res) => {
   }
 });
 
+// Get product performance report
+router.get('/products', authenticateToken, (req, res) => {
+  try {
+    const { period = 'month', limit = 20 } = req.query;
+    const db = getDatabase();
+    
+    let dateFilter = '';
+    
+    switch (period) {
+      case 'week':
+        dateFilter = 'AND s.created_at >= DATE("now", "-7 days")';
+        break;
+      case 'month':
+        dateFilter = 'AND s.created_at >= DATE("now", "-30 days")';
+        break;
+      case 'quarter':
+        dateFilter = 'AND s.created_at >= DATE("now", "-90 days")';
+        break;
+      case 'year':
+        dateFilter = 'AND s.created_at >= DATE("now", "-365 days")';
+        break;
+      default:
+        dateFilter = 'AND s.created_at >= DATE("now", "-30 days")';
+    }
+
+    const query = `
+      SELECT 
+        p.id,
+        p.name,
+        p.sku,
+        p.stock_quantity,
+        p.price,
+        p.cost,
+        c.name as category_name,
+        COALESCE(SUM(si.quantity), 0) as units_sold,
+        COALESCE(SUM(si.total_price), 0) as revenue,
+        COALESCE(COUNT(DISTINCT s.id), 0) as sale_count,
+        (p.stock_quantity * p.cost) as inventory_value,
+        (p.stock_quantity * p.price) as retail_value
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN sale_items si ON p.id = si.product_id
+      LEFT JOIN sales s ON si.sale_id = s.id ${dateFilter}
+      GROUP BY p.id, p.name, p.sku, p.stock_quantity, p.price, p.cost, c.name
+      ORDER BY units_sold DESC, revenue DESC
+      LIMIT ?
+    `;
+
+    db.all(query, [parseInt(limit)], (err, products) => {
+      if (err) {
+        console.error('Database error getting product performance:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      // Calculate summary
+      const summary = products.reduce((acc, product) => {
+        acc.totalRevenue += parseFloat(product.revenue);
+        acc.totalUnitsSold += product.units_sold;
+        acc.totalInventoryValue += parseFloat(product.inventory_value);
+        acc.totalRetailValue += parseFloat(product.retail_value);
+        return acc;
+      }, { totalRevenue: 0, totalUnitsSold: 0, totalInventoryValue: 0, totalRetailValue: 0 });
+
+      res.json({
+        period,
+        products,
+        summary: {
+          ...summary,
+          totalRevenue: summary.totalRevenue.toFixed(2),
+          totalInventoryValue: summary.totalInventoryValue.toFixed(2),
+          totalRetailValue: summary.totalRetailValue.toFixed(2)
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Product performance error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get category performance report
+router.get('/categories', authenticateToken, (req, res) => {
+  try {
+    const { period = 'month' } = req.query;
+    const db = getDatabase();
+    
+    let dateFilter = '';
+    
+    switch (period) {
+      case 'week':
+        dateFilter = 'AND s.created_at >= DATE("now", "-7 days")';
+        break;
+      case 'month':
+        dateFilter = 'AND s.created_at >= DATE("now", "-30 days")';
+        break;
+      case 'quarter':
+        dateFilter = 'AND s.created_at >= DATE("now", "-90 days")';
+        break;
+      case 'year':
+        dateFilter = 'AND s.created_at >= DATE("now", "-365 days")';
+        break;
+      default:
+        dateFilter = 'AND s.created_at >= DATE("now", "-30 days")';
+    }
+
+    const query = `
+      SELECT 
+        c.id,
+        c.name,
+        COUNT(DISTINCT p.id) as product_count,
+        COALESCE(SUM(si.quantity), 0) as units_sold,
+        COALESCE(SUM(si.total_price), 0) as revenue,
+        COALESCE(COUNT(DISTINCT s.id), 0) as sale_count,
+        COALESCE(SUM(p.stock_quantity), 0) as current_stock,
+        COALESCE(SUM(p.stock_quantity * p.cost), 0) as inventory_value
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.category_id
+      LEFT JOIN sale_items si ON p.id = si.product_id
+      LEFT JOIN sales s ON si.sale_id = s.id ${dateFilter}
+      GROUP BY c.id, c.name
+      ORDER BY revenue DESC
+    `;
+
+    db.all(query, (err, categories) => {
+      if (err) {
+        console.error('Database error getting category performance:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      // Calculate summary
+      const summary = categories.reduce((acc, category) => {
+        acc.totalRevenue += parseFloat(category.revenue);
+        acc.totalUnitsSold += category.units_sold;
+        acc.totalProducts += category.product_count;
+        acc.totalInventoryValue += parseFloat(category.inventory_value);
+        return acc;
+      }, { totalRevenue: 0, totalUnitsSold: 0, totalProducts: 0, totalInventoryValue: 0 });
+
+      res.json({
+        period,
+        categories,
+        summary: {
+          ...summary,
+          totalRevenue: summary.totalRevenue.toFixed(2),
+          totalInventoryValue: summary.totalInventoryValue.toFixed(2)
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Category performance error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
