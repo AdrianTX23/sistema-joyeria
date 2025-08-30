@@ -14,3 +14,10 @@ services:
         value: 10000
       - key: NODE_OPTIONS
         value: "--max-old-space-size=512"
+      - key: DB_PERSISTENCE
+        value: "true"
+      - key: DB_PATH
+        value: "./server/database/jewelry_inventory.db"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    branch: main

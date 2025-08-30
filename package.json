@@ -1,7 +1,7 @@
 {
-  "name": "jewelry-inventory-system",
+  "name": "sistema-joyeria",
   "version": "1.0.0",
-  "description": "Sistema de inventario y ventas para joyería con diseño minimalista",
+  "description": "Sistema de inventario para joyería",
   "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
@@ -10,17 +10,24 @@
     "build": "cd client && npm run build",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install",
     "vercel-build": "node build-config.js && npm run install-all && cd client && npm run build",
-    "start:prod": "cd server && npm start",
+    "start:prod": "npm run build && cd server && npm start",
     "heroku-postbuild": "npm run install-all",
-    "start": "npm run render-start",
+    "start": "npm run start:prod",
     "build:full": "npm run install-all && cd client && npm run build",
     "serve:full": "cd server && npm start",
     "render-build": "npm run install-all && cd client && npm run build",
-    "render-start": "cd server && npm start"
+    "render-start": "cd server && npm start",
+    "check-db": "node server/scripts/ensure-db-persistence.js",
+    "db-info": "cd server && node -e \"const { getDatabase } = require('./database/init'); const db = getDatabase(); db.all('SELECT name FROM sqlite_master WHERE type=\\'table\\'', (err, tables) => { if(err) console.error(err); else console.log('Tables:', tables.map(t => t.name)); db.close(); });\"",
+    "db-backup": "cd server && node -e \"const { exec } = require('child_process'); const path = require('path'); const dbPath = path.join(__dirname, 'database/jewelry_inventory.db'); const backupPath = path.join(__dirname, 'backups', 'manual-backup-' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.db'); exec('cp \"' + dbPath + '\" \"' + backupPath + '\"', (err) => { if(err) console.error('Backup error:', err); else console.log('Backup created:', backupPath); });\""
   },
-  "keywords": ["inventory", "sales", "jewelry", "react", "nodejs"],
-  "author": "Jewelry System",
+  "keywords": ["joyeria", "inventario", "react", "node", "sqlite"],
+  "author": "AdrianTX23",
   "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   }

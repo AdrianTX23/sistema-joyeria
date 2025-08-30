@@ -1,13 +1,43 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+
+// Asegurar que el directorio de la base de datos existe
+const dbDir = path.join(__dirname);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 
 const dbPath = path.join(__dirname, 'jewelry_inventory.db');
-const db = new sqlite3.Database(dbPath);
+console.log('🗄️ Database path:', dbPath);
+
+// Verificar si la base de datos existe
+const dbExists = fs.existsSync(dbPath);
+console.log('📁 Database exists:', dbExists);
+
+let db;
 
 async function initDatabase() {
   return new Promise((resolve, reject) => {
+    // Crear conexión a la base de datos
+    db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        console.error('❌ Error opening database:', err);
+        reject(err);
+        return;
+      }
+      console.log('✅ Connected to SQLite database');
+    });
+
+    // Configurar la base de datos para mejor rendimiento
+    db.configure('busyTimeout', 30000);
+    db.configure('journalMode', 'WAL'); // Write-Ahead Logging para mejor concurrencia
+
     db.serialize(() => {
+      // Habilitar foreign keys
+      db.run('PRAGMA foreign_keys = ON');
+
       // Create users table
       db.run(`
         CREATE TABLE IF NOT EXISTS users (
@@ -24,11 +54,9 @@ async function initDatabase() {
         )
       `, (err) => {
         if (err) {
-          console.error('Error creating users table:', err);
+          console.error('❌ Error creating users table:', err);
         } else {
-          console.log('✅ Users table created successfully');
-          
-
+          console.log('✅ Users table created/verified successfully');
         }
       });
 
@@ -40,7 +68,13 @@ async function initDatabase() {
           description TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-      `);
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating categories table:', err);
+        } else {
+          console.log('✅ Categories table created/verified successfully');
+        }
+      });
 
       // Create products table
       db.run(`
@@ -62,7 +96,13 @@ async function initDatabase() {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (category_id) REFERENCES categories (id)
         )
-      `);
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating products table:', err);
+        } else {
+          console.log('✅ Products table created/verified successfully');
+        }
+      });
 
       // Create sales table
       db.run(`
@@ -78,7 +118,13 @@ async function initDatabase() {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users (id)
         )
-      `);
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating sales table:', err);
+        } else {
+          console.log('✅ Sales table created/verified successfully');
+        }
+      });
 
       // Create sale_items table
       db.run(`
@@ -92,7 +138,13 @@ async function initDatabase() {
           FOREIGN KEY (sale_id) REFERENCES sales (id),
           FOREIGN KEY (product_id) REFERENCES products (id)
         )
-      `);
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating sale_items table:', err);
+        } else {
+          console.log('✅ Sale_items table created/verified successfully');
+        }
+      });
 
       // Create stock_movements table for inventory tracking
       db.run(`
@@ -109,9 +161,15 @@ async function initDatabase() {
           FOREIGN KEY (product_id) REFERENCES products (id),
           FOREIGN KEY (user_id) REFERENCES users (id)
         )
-      `);
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating stock_movements table:', err);
+        } else {
+          console.log('✅ Stock_movements table created/verified successfully');
+        }
+      });
 
-      // Insert default categories
+      // Insert default categories only if they don't exist
       const defaultCategories = [
         { name: 'Anillos', description: 'Anillos de diferentes estilos y materiales' },
         { name: 'Collares', description: 'Collares y gargantillas' },
@@ -121,39 +179,121 @@ async function initDatabase() {
         { name: 'Otros', description: 'Otros accesorios de joyería' }
       ];
 
-      const insertCategory = db.prepare('INSERT OR IGNORE INTO categories (name, description) VALUES (?, ?)');
-      defaultCategories.forEach(category => {
-        insertCategory.run(category.name, category.description);
+      // Verificar si ya existen categorías
+      db.get('SELECT COUNT(*) as count FROM categories', (err, row) => {
+        if (err) {
+          console.error('❌ Error checking categories:', err);
+        } else {
+          const categoryCount = row.count;
+          console.log(`📊 Found ${categoryCount} existing categories`);
+          
+          if (categoryCount === 0) {
+            console.log('📝 Inserting default categories...');
+            const insertCategory = db.prepare('INSERT OR IGNORE INTO categories (name, description) VALUES (?, ?)');
+            defaultCategories.forEach(category => {
+              insertCategory.run(category.name, category.description);
+            });
+            insertCategory.finalize();
+            console.log('✅ Default categories inserted');
+          } else {
+            console.log('✅ Categories already exist, skipping insertion');
+          }
+        }
       });
-      insertCategory.finalize();
 
-      // Create default admin user
-      const defaultPassword = bcrypt.hashSync('admin123', 10);
-      db.run(`
-        INSERT OR IGNORE INTO users (username, email, password, role, full_name)
-        VALUES ('admin', 'admin@joyeria.com', ?, 'administrador', 'Administrador del Sistema')
-      `, [defaultPassword]);
+      // Create default admin user only if it doesn't exist
+      db.get('SELECT COUNT(*) as count FROM users WHERE username = ?', ['admin'], (err, row) => {
+        if (err) {
+          console.error('❌ Error checking admin user:', err);
+        } else {
+          const userCount = row.count;
+          console.log(`👤 Found ${userCount} admin users`);
+          
+          if (userCount === 0) {
+            console.log('📝 Creating default admin user...');
+            const defaultPassword = bcrypt.hashSync('admin123', 10);
+            db.run(`
+              INSERT INTO users (username, email, password, role, full_name)
+              VALUES (?, ?, ?, ?, ?)
+            `, ['admin', 'admin@joyeria.com', defaultPassword, 'administrador', 'Administrador del Sistema'], (err) => {
+              if (err) {
+                console.error('❌ Error creating admin user:', err);
+              } else {
+                console.log('✅ Default admin user created');
+                console.log('🔑 Admin credentials: admin / admin123');
+              }
+            });
+          } else {
+            console.log('✅ Admin user already exists');
+          }
+        }
+      });
 
       // Create indexes for better performance
+      console.log('📈 Creating database indexes...');
       db.run('CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)');
       db.run('CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)');
       db.run('CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(created_at)');
       db.run('CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id)');
       db.run('CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+      console.log('✅ Database indexes created');
 
-      db.close((err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
+      // Verificar el tamaño de la base de datos
+      setTimeout(() => {
+        const stats = fs.statSync(dbPath);
+        const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
+        console.log(`💾 Database size: ${fileSizeInMB} MB`);
+        
+        resolve();
+      }, 1000);
     });
   });
 }
 
 function getDatabase() {
-  return new sqlite3.Database(dbPath);
+  if (!db) {
+    db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        console.error('❌ Error opening database:', err);
+      } else {
+        console.log('✅ Database connection established');
+      }
+    });
+    
+    // Configurar la base de datos
+    db.configure('busyTimeout', 30000);
+    db.configure('journalMode', 'WAL');
+    db.run('PRAGMA foreign_keys = ON');
+  }
+  return db;
 }
 
-module.exports = { initDatabase, getDatabase };
+// Función para cerrar la base de datos
+function closeDatabase() {
+  if (db) {
+    db.close((err) => {
+      if (err) {
+        console.error('❌ Error closing database:', err);
+      } else {
+        console.log('✅ Database connection closed');
+      }
+    });
+  }
+}
+
+// Manejar señales de terminación para cerrar la base de datos correctamente
+process.on('SIGINT', () => {
+  console.log('\n🛑 Received SIGINT, closing database...');
+  closeDatabase();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Received SIGTERM, closing database...');
+  closeDatabase();
+  process.exit(0);
+});
+
+module.exports = { initDatabase, getDatabase, closeDatabase };
