@@ -217,30 +217,60 @@ async function initDatabase() {
         }
       });
 
-      // Create default admin user only if it doesn't exist
-      db.get('SELECT COUNT(*) as count FROM users WHERE username = ?', ['admin'], (err, row) => {
+      // Create default users only if they don't exist
+      const defaultUsers = [
+        {
+          username: 'admin',
+          email: 'admin@joyeria.com',
+          password: 'admin123',
+          role: 'administrador',
+          full_name: 'Administrador del Sistema'
+        },
+        {
+          username: 'vendedor1',
+          email: 'vendedor1@joyeria.com',
+          password: 'vendedor123',
+          role: 'vendedor',
+          full_name: 'María González - Vendedora'
+        },
+        {
+          username: 'vendedor2',
+          email: 'vendedor2@joyeria.com',
+          password: 'vendedor123',
+          role: 'vendedor',
+          full_name: 'Carlos Rodríguez - Vendedor'
+        }
+      ];
+
+      // Verificar si ya existen usuarios
+      db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
         if (err) {
-          console.error('❌ Error checking admin user:', err);
+          console.error('❌ Error checking users:', err);
         } else {
           const userCount = row.count;
-          console.log(`👤 Found ${userCount} admin users`);
+          console.log(`👥 Found ${userCount} existing users`);
           
           if (userCount === 0) {
-            console.log('📝 Creating default admin user...');
-            const defaultPassword = bcrypt.hashSync('admin123', 10);
-            db.run(`
-              INSERT INTO users (username, email, password, role, full_name)
-              VALUES (?, ?, ?, ?, ?)
-            `, ['admin', 'admin@joyeria.com', defaultPassword, 'administrador', 'Administrador del Sistema'], (err) => {
-              if (err) {
-                console.error('❌ Error creating admin user:', err);
-              } else {
-                console.log('✅ Default admin user created');
-                console.log('🔑 Admin credentials: admin / admin123');
-              }
+            console.log('📝 Creating default users...');
+            
+            defaultUsers.forEach(user => {
+              const hashedPassword = bcrypt.hashSync(user.password, 10);
+              db.run(`
+                INSERT INTO users (username, email, password, role, full_name)
+                VALUES (?, ?, ?, ?, ?)
+              `, [user.username, user.email, hashedPassword, user.role, user.full_name], (err) => {
+                if (err) {
+                  console.error(`❌ Error creating user ${user.username}:`, err);
+                } else {
+                  console.log(`✅ User ${user.username} created successfully`);
+                  console.log(`🔑 ${user.full_name} credentials: ${user.username} / ${user.password}`);
+                }
+              });
             });
+            
+            console.log('✅ All default users created');
           } else {
-            console.log('✅ Admin user already exists');
+            console.log('✅ Users already exist, skipping insertion');
           }
         }
       });
