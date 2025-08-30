@@ -190,11 +190,32 @@ async function startServer() {
     await initDatabase();
     console.log('✅ Base de datos inicializada correctamente');
     
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 API available at http://localhost:${PORT}/api`);
       console.log('🎉 Servidor iniciado correctamente');
     });
+
+    // Configurar timeout para conexiones
+    server.timeout = 30000; // 30 segundos
+    server.keepAliveTimeout = 65000; // 65 segundos
+    server.headersTimeout = 66000; // 66 segundos
+
+    // Manejar errores del servidor
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error('❌ Port is already in use');
+        process.exit(1);
+      }
+    });
+
+    // Manejar conexiones cerradas
+    server.on('close', () => {
+      console.log('🛑 Server is shutting down');
+      closeDatabase();
+    });
+
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);

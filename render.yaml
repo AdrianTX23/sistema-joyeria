@@ -20,3 +20,11 @@ services:
         value: 10000
     healthCheckPath: /api/health
     autoDeploy: true
+    # Configuraciones para mejorar estabilidad
+    scaling:
+      minInstances: 0
+      maxInstances: 1
+    # Configuración de health check más robusta
+    healthCheckPath: /api/health
+    healthCheckTimeout: 300
+    healthCheckInterval: 60
