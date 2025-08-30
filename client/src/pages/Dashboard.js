@@ -36,20 +36,15 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [dashboardRes, salesRes, topProductsRes] = await Promise.all([
-        axios.get('/api/reports/dashboard'),
-        axios.get('/api/reports/sales?period=week'),
-        axios.get('/api/sales/stats/top-products?limit=5&period=week'),
-      ]);
-
-      setDashboardData({
-        dashboard: dashboardRes.data,
-        sales: salesRes.data,
-        topProducts: topProductsRes.data.products,
-      });
+      console.log('🔍 Fetching dashboard data...');
+      
+      const response = await axios.get('/api/reports/dashboard');
+      console.log('📊 Dashboard data received:', response.data);
+      
+      setDashboardData(response.data);
     } catch (err) {
+      console.error('❌ Dashboard error:', err);
       setError('Error al cargar los datos del dashboard');
-      console.error('Dashboard error:', err);
     } finally {
       setLoading(false);
     }
@@ -79,13 +74,25 @@ const Dashboard = () => {
     return (
       <div className="text-center py-8">
         <p className="text-red-600">{error}</p>
+        <button 
+          onClick={fetchDashboardData}
+          className="btn btn-primary mt-4"
+        >
+          Reintentar
+        </button>
       </div>
     );
   }
 
-  const { dashboard, sales, topProducts } = dashboardData;
+  if (!dashboardData) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-600">No hay datos disponibles</p>
+      </div>
+    );
+  }
 
-
+  const { summary, recentSales, topProducts } = dashboardData;
 
   const StatCard = ({ title, value, icon: Icon, trend, trendValue, color = 'primary' }) => (
     <div className="card">
@@ -129,25 +136,25 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Ventas Hoy"
-          value={dashboard.today.sales}
+          value={summary.todaySales || 0}
           icon={ShoppingCart}
           color="primary"
         />
         <StatCard
           title="Ingresos Hoy"
-          value={`$${dashboard.today.revenue}`}
+          value={`$${summary.todayRevenue || '0.00'}`}
           icon={DollarSign}
           color="success"
         />
         <StatCard
           title="Productos"
-          value={dashboard.inventory.totalProducts}
+          value={summary.totalProducts || 0}
           icon={Package}
           color="secondary"
         />
         <StatCard
           title="Stock Bajo"
-          value={dashboard.inventory.lowStockItems}
+          value={summary.lowStockProducts || 0}
           icon={AlertTriangle}
           color="warning"
         />
@@ -155,29 +162,32 @@ const Dashboard = () => {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sales Chart */}
+        {/* Recent Sales */}
         <div className="card">
           <div className="card-header">
-            <h3 className="text-lg font-semibold text-gray-900">Ventas de la Semana</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Ventas Recientes</h3>
           </div>
           <div className="card-body">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={sales.data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#8B5CF6"
-                    strokeWidth={2}
-                    dot={{ fill: '#8B5CF6', strokeWidth: 2, r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {recentSales && recentSales.length > 0 ? (
+              <div className="space-y-3">
+                {recentSales.slice(0, 5).map((sale) => (
+                  <div key={sale.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900">{sale.customer_name || 'Cliente sin nombre'}</p>
+                      <p className="text-sm text-gray-600">{sale.sale_number}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-success-600">${parseFloat(sale.total_amount).toFixed(2)}</p>
+                      <p className="text-sm text-gray-600">
+                        {new Date(sale.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-600 text-center py-4">No hay ventas recientes</p>
+            )}
           </div>
         </div>
 
@@ -187,17 +197,21 @@ const Dashboard = () => {
             <h3 className="text-lg font-semibold text-gray-900">Productos Más Vendidos</h3>
           </div>
           <div className="card-body">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProducts}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="units_sold" fill="#8B5CF6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {topProducts && topProducts.length > 0 ? (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topProducts}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="total_sold" fill="#8B5CF6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-gray-600 text-center py-4">No hay datos de productos vendidos</p>
+            )}
           </div>
         </div>
       </div>
@@ -211,18 +225,18 @@ const Dashboard = () => {
           <div className="card-body space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Ventas Totales</span>
-              <span className="font-semibold">{dashboard.month.sales}</span>
+              <span className="font-semibold">{summary.monthSales || 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Ingresos</span>
               <span className="font-semibold text-success-600">
-                ${dashboard.month.revenue}
+                ${summary.monthRevenue || '0.00'}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Promedio por Venta</span>
               <span className="font-semibold">
-                ${dashboard.month.averageSale}
+                ${summary.monthSales > 0 ? (parseFloat(summary.monthRevenue) / summary.monthSales).toFixed(2) : '0.00'}
               </span>
             </div>
           </div>
@@ -234,19 +248,19 @@ const Dashboard = () => {
           </div>
           <div className="card-body space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">Valor Total</span>
-              <span className="font-semibold text-primary-600">
-                ${dashboard.inventory.totalValue}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
               <span className="text-gray-600">Productos</span>
-              <span className="font-semibold">{dashboard.inventory.totalProducts}</span>
+              <span className="font-semibold">{summary.totalProducts || 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Stock Bajo</span>
               <span className="font-semibold text-warning-600">
-                {dashboard.inventory.lowStockItems}
+                {summary.lowStockProducts || 0}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Estado</span>
+              <span className={`font-semibold ${summary.lowStockProducts > 0 ? 'text-warning-600' : 'text-success-600'}`}>
+                {summary.lowStockProducts > 0 ? 'Atención' : 'Normal'}
               </span>
             </div>
           </div>

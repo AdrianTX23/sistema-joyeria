@@ -7,13 +7,15 @@ const AuthContext = createContext();
 
 const initialState = {
   user: null,
-  token: sessionStorage.getItem('token') || localStorage.getItem('token'), // Usar sessionStorage primero
+  token: sessionStorage.getItem('token') || localStorage.getItem('token'),
   isAuthenticated: false,
   loading: true,
   sessionExpired: false,
 };
 
 const authReducer = (state, action) => {
+  console.log('🔄 Auth reducer action:', action.type, action.payload);
+  
   switch (action.type) {
     case 'LOGIN_START':
       return {
@@ -70,16 +72,21 @@ const authReducer = (state, action) => {
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
+  console.log('🔍 AuthProvider - Current state:', state);
+
   // Configurar axios con la URL del backend
   useEffect(() => {
+    console.log('🔧 Setting up axios with baseURL:', API_CONFIG.baseURL);
     axios.defaults.baseURL = API_CONFIG.baseURL;
   }, []);
 
   // Set up axios defaults
   useEffect(() => {
     if (state.token) {
+      console.log('🔑 Setting Authorization header with token');
       axios.defaults.headers.common['Authorization'] = `Bearer ${state.token}`;
     } else {
+      console.log('🔓 Removing Authorization header');
       delete axios.defaults.headers.common['Authorization'];
     }
   }, [state.token]);
@@ -87,6 +94,8 @@ export const AuthProvider = ({ children }) => {
   // Check if user is authenticated on app load
   useEffect(() => {
     const checkAuth = async () => {
+      console.log('🔍 Checking authentication on app load...');
+      
       // Intentar obtener token de sessionStorage primero (sesión temporal)
       let token = sessionStorage.getItem('token');
       let isSessionToken = true;
@@ -97,10 +106,14 @@ export const AuthProvider = ({ children }) => {
         isSessionToken = false;
       }
       
+      console.log('🎫 Token found:', token ? 'Yes' : 'No', 'Type:', isSessionToken ? 'session' : 'local');
+      
       if (token) {
         try {
+          console.log('🔍 Validating token with server...');
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           const response = await axios.get('/api/auth/profile');
+          console.log('✅ Token validation successful:', response.data);
           
           // Si el token es de sessionStorage, moverlo a sessionStorage para mantener la sesión temporal
           if (isSessionToken) {
@@ -115,22 +128,25 @@ export const AuthProvider = ({ children }) => {
             },
           });
         } catch (error) {
+          console.error('❌ Token validation failed:', error.response?.data || error.message);
           // Limpiar tokens inválidos
           sessionStorage.removeItem('token');
           localStorage.removeItem('token');
           dispatch({ type: 'LOGIN_FAILURE' });
         }
       } else {
+        console.log('🚫 No token found, user not authenticated');
         dispatch({ type: 'LOGIN_FAILURE' });
       }
     };
 
     checkAuth();
-  }, []); // Removed state.token dependency to prevent infinite loops
+  }, []);
 
   // Manejar cierre de sesión automático cuando se cierra la página
   useEffect(() => {
     const handleBeforeUnload = () => {
+      console.log('🔄 Page unloading, cleaning session token');
       // Si hay un token en sessionStorage, limpiarlo al cerrar la página
       if (sessionStorage.getItem('token')) {
         sessionStorage.removeItem('token');
@@ -142,6 +158,7 @@ export const AuthProvider = ({ children }) => {
       if (document.hidden) {
         setTimeout(() => {
           if (document.hidden && sessionStorage.getItem('token')) {
+            console.log('⏰ Session expired due to inactivity');
             sessionStorage.removeItem('token');
             dispatch({ type: 'SESSION_EXPIRED' });
             toast.error('Sesión expirada por inactividad');
@@ -162,6 +179,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (username, password, rememberMe = false) => {
+    console.log('🔐 Login attempt for user:', username, 'Remember me:', rememberMe);
     dispatch({ type: 'LOGIN_START' });
     
     try {
@@ -171,15 +189,18 @@ export const AuthProvider = ({ children }) => {
       });
 
       const { user, token } = response.data;
+      console.log('✅ Login successful:', user);
       
       // Si "recordar sesión" está marcado, usar localStorage (persistente)
       // Si no, usar sessionStorage (temporal, se pierde al cerrar la página)
       if (rememberMe) {
         localStorage.setItem('token', token);
         localStorage.removeItem('sessionToken'); // Limpiar token de sesión si existe
+        console.log('💾 Token saved to localStorage (persistent)');
       } else {
         sessionStorage.setItem('token', token);
         localStorage.removeItem('token'); // Limpiar token persistente si existe
+        console.log('💾 Token saved to sessionStorage (temporary)');
       }
       
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -192,6 +213,7 @@ export const AuthProvider = ({ children }) => {
       toast.success(`Bienvenido, ${user.fullName}!`);
       return { success: true };
     } catch (error) {
+      console.error('❌ Login failed:', error.response?.data || error.message);
       const message = error.response?.data?.error || 'Error al iniciar sesión';
       toast.error(message);
       dispatch({ type: 'LOGIN_FAILURE' });
@@ -200,6 +222,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    console.log('🚪 Logging out user');
     // Limpiar todos los tokens
     sessionStorage.removeItem('token');
     localStorage.removeItem('token');
@@ -209,6 +232,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (userData) => {
+    console.log('👤 Updating user data:', userData);
     dispatch({
       type: 'UPDATE_USER',
       payload: userData,
@@ -238,6 +262,8 @@ export const AuthProvider = ({ children }) => {
     updateUser,
     changePassword,
   };
+
+  console.log('🎯 AuthProvider - Final state:', state);
 
   return (
     <AuthContext.Provider value={value}>
