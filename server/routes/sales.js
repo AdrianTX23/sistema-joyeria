@@ -1,6 +1,6 @@
 const express = require('express');
 const { getDatabase } = require('../database/init');
-const moment = require('moment');
+const { authenticateToken } = require('./auth');
 
 const router = express.Router();
 
@@ -12,13 +12,13 @@ function generateSaleNumber() {
 }
 
 // Get all sales with pagination and filters
-router.get('/', (req, res) => {
+router.get('/', authenticateToken, (req, res) => {
   try {
     const { page = 1, limit = 10, search = '', startDate = '', endDate = '' } = req.query;
     const offset = (page - 1) * limit;
     
     let query = `
-      SELECT s.*, u.full_name as seller_name 
+      SELECT s.*, u.full_name as user_name 
       FROM sales s 
       LEFT JOIN users u ON s.user_id = u.id 
       WHERE 1=1
@@ -28,8 +28,8 @@ router.get('/', (req, res) => {
     let countParams = [];
 
     if (search) {
-      query += ' AND (s.sale_number LIKE ? OR s.customer_name LIKE ? OR s.customer_email LIKE ?)';
-      countQuery += ' AND (s.sale_number LIKE ? OR s.customer_name LIKE ? OR s.customer_email LIKE ?)';
+      query += ' AND (s.customer_name LIKE ? OR s.customer_email LIKE ? OR s.sale_number LIKE ?)';
+      countQuery += ' AND (s.customer_name LIKE ? OR s.customer_email LIKE ? OR s.sale_number LIKE ?)';
       const searchParam = `%${search}%`;
       params.push(searchParam, searchParam, searchParam);
       countParams.push(searchParam, searchParam, searchParam);
@@ -56,13 +56,13 @@ router.get('/', (req, res) => {
     
     db.get(countQuery, countParams, (err, countResult) => {
       if (err) {
-        db.close();
+        console.error('Database error getting sales count:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
       db.all(query, params, (err, sales) => {
-        db.close();
         if (err) {
+          console.error('Database error getting sales:', err);
           return res.status(500).json({ error: 'Database error' });
         }
 
@@ -83,41 +83,41 @@ router.get('/', (req, res) => {
   }
 });
 
-// Get single sale by ID with items
-router.get('/:id', (req, res) => {
+// Get single sale with items
+router.get('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const db = getDatabase();
     
     // Get sale details
     db.get(
-      `SELECT s.*, u.full_name as seller_name 
+      `SELECT s.*, u.full_name as user_name 
        FROM sales s 
        LEFT JOIN users u ON s.user_id = u.id 
        WHERE s.id = ?`,
       [id],
       (err, sale) => {
         if (err) {
-          db.close();
+          console.error('Database error getting sale:', err);
           return res.status(500).json({ error: 'Database error' });
         }
         if (!sale) {
-          db.close();
           return res.status(404).json({ error: 'Sale not found' });
         }
 
         // Get sale items
         db.all(
-          `SELECT si.*, p.name as product_name, p.sku, p.image_url 
+          `SELECT si.*, p.name as product_name, p.sku 
            FROM sale_items si 
            LEFT JOIN products p ON si.product_id = p.id 
            WHERE si.sale_id = ?`,
           [id],
           (err, items) => {
-            db.close();
             if (err) {
+              console.error('Database error getting sale items:', err);
               return res.status(500).json({ error: 'Database error' });
             }
+
             res.json({ 
               sale: { ...sale, items } 
             });
@@ -132,7 +132,7 @@ router.get('/:id', (req, res) => {
 });
 
 // Create new sale
-router.post('/', (req, res) => {
+router.post('/', authenticateToken, (req, res) => {
   try {
     const {
       customer_name,
@@ -142,161 +142,117 @@ router.post('/', (req, res) => {
       items
     } = req.body;
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Sale must have at least one item' });
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
     }
 
-    if (!payment_method) {
-      return res.status(400).json({ error: 'Payment method is required' });
-    }
-
-    const saleNumber = generateSaleNumber();
     const db = getDatabase();
-
+    
     // Calculate total amount
-    let totalAmount = 0;
-    for (const item of items) {
-      totalAmount += item.quantity * item.unit_price;
-    }
+    const total_amount = items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+    
+    // Generate sale number
+    const sale_number = `SALE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    // Start transaction
-    db.serialize(() => {
-      db.run('BEGIN TRANSACTION');
+    // Insert sale
+    db.run(
+      `INSERT INTO sales (
+        sale_number, customer_name, customer_email, customer_phone, 
+        total_amount, payment_method, user_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [sale_number, customer_name, customer_email, customer_phone, total_amount, payment_method, req.user.id],
+      function(err) {
+        if (err) {
+          console.error('Database error creating sale:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
 
-      // Create sale record
-      db.run(
-        `INSERT INTO sales (
-          sale_number, customer_name, customer_email, customer_phone, 
-          total_amount, payment_method, user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          saleNumber, customer_name || null, customer_email || null, 
-          customer_phone || null, totalAmount, payment_method, req.user?.id || 1
-        ],
-        function(err) {
-          if (err) {
-            db.run('ROLLBACK');
-            db.close();
-            return res.status(500).json({ error: 'Database error' });
-          }
+        const sale_id = this.lastID;
+        let itemsInserted = 0;
+        let hasError = false;
 
-          const saleId = this.lastID;
-          let itemsProcessed = 0;
-          let hasError = false;
+        // Insert sale items and update stock
+        items.forEach((item, index) => {
+          // Insert sale item
+          db.run(
+            'INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)',
+            [sale_id, item.product_id, item.quantity, item.unit_price, item.unit_price * item.quantity],
+            function(err) {
+              if (err) {
+                console.error('Database error inserting sale item:', err);
+                hasError = true;
+                return;
+              }
 
-          // Process each item
-          items.forEach((item, index) => {
-            // Check stock availability
-            db.get(
-              'SELECT stock_quantity, name FROM products WHERE id = ?',
-              [item.product_id],
-              (err, product) => {
-                if (err || !product) {
-                  hasError = true;
-                  db.run('ROLLBACK');
-                  db.close();
-                  return res.status(400).json({ error: `Product not found: ${item.product_id}` });
-                }
+              // Update product stock
+              db.run(
+                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                [item.quantity, item.product_id],
+                function(err) {
+                  if (err) {
+                    console.error('Database error updating product stock:', err);
+                    hasError = true;
+                    return;
+                  }
 
-                if (product.stock_quantity < item.quantity) {
-                  hasError = true;
-                  db.run('ROLLBACK');
-                  db.close();
-                  return res.status(400).json({ 
-                    error: `Insufficient stock for ${product.name}. Available: ${product.stock_quantity}, Requested: ${item.quantity}` 
-                  });
-                }
+                  // Record stock movement
+                  db.run(
+                    'INSERT INTO stock_movements (product_id, movement_type, quantity, previous_stock, new_stock, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [item.product_id, 'sale', -item.quantity, item.current_stock, item.current_stock - item.quantity, req.user.id, `Sale ${sale_number}`],
+                    (err) => {
+                      if (err) {
+                        console.error('Database error recording stock movement:', err);
+                      }
+                    }
+                  );
 
-                // Insert sale item
-                db.run(
-                  `INSERT INTO sale_items (
-                    sale_id, product_id, quantity, unit_price, total_price
-                  ) VALUES (?, ?, ?, ?, ?)`,
-                  [
-                    saleId, item.product_id, item.quantity, 
-                    item.unit_price, item.quantity * item.unit_price
-                  ],
-                  function(err) {
-                    if (err) {
-                      hasError = true;
-                      db.run('ROLLBACK');
-                      db.close();
-                      return res.status(500).json({ error: 'Database error' });
+                  itemsInserted++;
+                  if (itemsInserted === items.length) {
+                    if (hasError) {
+                      return res.status(500).json({ error: 'Error creating sale' });
                     }
 
-                    // Update product stock
-                    const newStock = product.stock_quantity - item.quantity;
-                    db.run(
-                      'UPDATE products SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                      [newStock, item.product_id],
-                      function(err) {
+                    // Get complete sale with items
+                    db.get(
+                      `SELECT s.*, u.full_name as user_name 
+                       FROM sales s 
+                       LEFT JOIN users u ON s.user_id = u.id 
+                       WHERE s.id = ?`,
+                      [sale_id],
+                      (err, sale) => {
                         if (err) {
-                          hasError = true;
-                          db.run('ROLLBACK');
-                          db.close();
+                          console.error('Database error getting created sale:', err);
                           return res.status(500).json({ error: 'Database error' });
                         }
 
-                        // Record stock movement
-                        db.run(
-                          `INSERT INTO stock_movements (
-                            product_id, movement_type, quantity, previous_stock, new_stock, user_id, notes
-                          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                          [
-                            item.product_id, 'sale', -item.quantity, product.stock_quantity, newStock,
-                            req.user?.id || 1, `Sale ${saleNumber}`
-                          ]
-                        );
-
-                        itemsProcessed++;
-                        
-                        // If all items processed, commit transaction
-                        if (itemsProcessed === items.length && !hasError) {
-                          db.run('COMMIT');
-                          
-                          // Get complete sale with items
-                          db.get(
-                            `SELECT s.*, u.full_name as seller_name 
-                             FROM sales s 
-                             LEFT JOIN users u ON s.user_id = u.id 
-                             WHERE s.id = ?`,
-                            [saleId],
-                            (err, sale) => {
-                              if (err) {
-                                db.close();
-                                return res.status(500).json({ error: 'Database error' });
-                              }
-
-                              db.all(
-                                `SELECT si.*, p.name as product_name, p.sku, p.image_url 
-                                 FROM sale_items si 
-                                 LEFT JOIN products p ON si.product_id = p.id 
-                                 WHERE si.sale_id = ?`,
-                                [saleId],
-                                (err, saleItems) => {
-                                  db.close();
-                                  if (err) {
-                                    return res.status(500).json({ error: 'Database error' });
-                                  }
-                                  res.status(201).json({
-                                    message: 'Sale created successfully',
-                                    sale: { ...sale, items: saleItems }
-                                  });
-                                }
-                              );
+                        db.all(
+                          `SELECT si.*, p.name as product_name, p.sku 
+                           FROM sale_items si 
+                           LEFT JOIN products p ON si.product_id = p.id 
+                           WHERE si.sale_id = ?`,
+                          [sale_id],
+                          (err, saleItems) => {
+                            if (err) {
+                              console.error('Database error getting sale items:', err);
+                              return res.status(500).json({ error: 'Database error' });
                             }
-                          );
-                        }
+
+                            res.status(201).json({ 
+                              message: 'Sale created successfully',
+                              sale: { ...sale, items: saleItems }
+                            });
+                          }
+                        );
                       }
                     );
                   }
-                );
-              }
-            );
-          });
-        }
-      );
-    });
+                }
+              );
+            }
+          );
+        });
+      }
+    );
   } catch (error) {
     console.error('Create sale error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -304,67 +260,105 @@ router.post('/', (req, res) => {
 });
 
 // Get sales statistics
-router.get('/stats/summary', (req, res) => {
+router.get('/stats/summary', authenticateToken, (req, res) => {
   try {
-    const { period = 'today' } = req.query;
+    const { period = 'month' } = req.query;
     const db = getDatabase();
     
     let dateFilter = '';
-    let params = [];
     
     switch (period) {
-      case 'today':
-        dateFilter = 'WHERE DATE(created_at) = DATE("now")';
-        break;
       case 'week':
-        dateFilter = 'WHERE created_at >= DATE("now", "-7 days")';
+        dateFilter = 'AND created_at >= DATE("now", "-7 days")';
         break;
       case 'month':
-        dateFilter = 'WHERE created_at >= DATE("now", "-30 days")';
+        dateFilter = 'AND created_at >= DATE("now", "-30 days")';
+        break;
+      case 'quarter':
+        dateFilter = 'AND created_at >= DATE("now", "-90 days")';
         break;
       case 'year':
-        dateFilter = 'WHERE created_at >= DATE("now", "-365 days")';
+        dateFilter = 'AND created_at >= DATE("now", "-365 days")';
         break;
       default:
-        dateFilter = 'WHERE DATE(created_at) = DATE("now")';
+        dateFilter = 'AND created_at >= DATE("now", "-30 days")';
     }
 
-    const query = `
+    // Get sales summary
+    const summaryQuery = `
       SELECT 
         COUNT(*) as total_sales,
         SUM(total_amount) as total_revenue,
-        AVG(total_amount) as average_sale,
-        MIN(total_amount) as min_sale,
-        MAX(total_amount) as max_sale
+        AVG(total_amount) as avg_sale,
+        COUNT(DISTINCT customer_email) as unique_customers
       FROM sales 
-      ${dateFilter}
+      WHERE 1=1 ${dateFilter}
     `;
 
-    db.get(query, params, (err, stats) => {
-      db.close();
+    // Get sales by payment method
+    const paymentQuery = `
+      SELECT 
+        payment_method,
+        COUNT(*) as count,
+        SUM(total_amount) as total
+      FROM sales 
+      WHERE 1=1 ${dateFilter}
+      GROUP BY payment_method
+      ORDER BY total DESC
+    `;
+
+    // Get recent sales
+    const recentQuery = `
+      SELECT 
+        s.id, s.sale_number, s.customer_name, s.total_amount, s.created_at,
+        u.full_name as user_name
+      FROM sales s
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE 1=1 ${dateFilter}
+      ORDER BY s.created_at DESC
+      LIMIT 5
+    `;
+
+    db.get(summaryQuery, (err, summary) => {
       if (err) {
+        console.error('Database error getting sales summary:', err);
         return res.status(500).json({ error: 'Database error' });
       }
-      
-      res.json({
-        period,
-        stats: {
-          totalSales: stats.total_sales || 0,
-          totalRevenue: parseFloat(stats.total_revenue || 0).toFixed(2),
-          averageSale: parseFloat(stats.average_sale || 0).toFixed(2),
-          minSale: parseFloat(stats.min_sale || 0).toFixed(2),
-          maxSale: parseFloat(stats.max_sale || 0).toFixed(2)
+
+      db.all(paymentQuery, (err, paymentMethods) => {
+        if (err) {
+          console.error('Database error getting payment methods:', err);
+          return res.status(500).json({ error: 'Database error' });
         }
+
+        db.all(recentQuery, (err, recentSales) => {
+          if (err) {
+            console.error('Database error getting recent sales:', err);
+            return res.status(500).json({ error: 'Database error' });
+          }
+
+          res.json({
+            period,
+            summary: {
+              totalSales: summary.total_sales || 0,
+              totalRevenue: parseFloat(summary.total_revenue || 0).toFixed(2),
+              averageSale: parseFloat(summary.avg_sale || 0).toFixed(2),
+              uniqueCustomers: summary.unique_customers || 0
+            },
+            paymentMethods,
+            recentSales
+          });
+        });
       });
     });
   } catch (error) {
-    console.error('Get sales stats error:', error);
+    console.error('Sales stats error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Get top selling products
-router.get('/stats/top-products', (req, res) => {
+router.get('/stats/top-products', authenticateToken, (req, res) => {
   try {
     const { limit = 10, period = 'month' } = req.query;
     const db = getDatabase();
@@ -403,8 +397,8 @@ router.get('/stats/top-products', (req, res) => {
     `;
 
     db.all(query, [parseInt(limit)], (err, products) => {
-      db.close();
       if (err) {
+        console.error('Database error getting top products:', err);
         return res.status(500).json({ error: 'Database error' });
       }
       
@@ -417,7 +411,7 @@ router.get('/stats/top-products', (req, res) => {
 });
 
 // Delete sale (with stock restoration)
-router.delete('/:id', (req, res) => {
+router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const db = getDatabase();
@@ -432,13 +426,11 @@ router.delete('/:id', (req, res) => {
         (err, items) => {
           if (err) {
             db.run('ROLLBACK');
-            db.close();
             return res.status(500).json({ error: 'Database error' });
           }
 
           if (items.length === 0) {
             db.run('ROLLBACK');
-            db.close();
             return res.status(404).json({ error: 'Sale not found' });
           }
 
@@ -454,7 +446,6 @@ router.delete('/:id', (req, res) => {
                 if (err) {
                   hasError = true;
                   db.run('ROLLBACK');
-                  db.close();
                   return res.status(500).json({ error: 'Database error' });
                 }
 
@@ -465,7 +456,6 @@ router.delete('/:id', (req, res) => {
                   db.run('DELETE FROM sale_items WHERE sale_id = ?', [id], function(err) {
                     if (err) {
                       db.run('ROLLBACK');
-                      db.close();
                       return res.status(500).json({ error: 'Database error' });
                     }
 
@@ -473,12 +463,10 @@ router.delete('/:id', (req, res) => {
                     db.run('DELETE FROM sales WHERE id = ?', [id], function(err) {
                       if (err) {
                         db.run('ROLLBACK');
-                        db.close();
                         return res.status(500).json({ error: 'Database error' });
                       }
 
                       db.run('COMMIT');
-                      db.close();
                       res.json({ message: 'Sale deleted successfully' });
                     });
                   });
