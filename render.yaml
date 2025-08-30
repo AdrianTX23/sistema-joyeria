@@ -3,16 +3,8 @@ services:
     name: sistema-joyeria
     env: node
     plan: free
-    buildCommand: |
-      echo "🔧 Building application..."
-      npm install
-      cd client && npm install
-      cd .. && npm run build:full
-      echo "✅ Build completed"
-    startCommand: |
-      echo "🚀 Starting application..."
-      npm run render-start
-      echo "✅ Application started"
+    buildCommand: npm run render-build
+    startCommand: npm run render-start
     envVars:
       - key: NODE_ENV
         value: production
@@ -28,4 +20,3 @@ services:
         value: 10000
     healthCheckPath: /api/health
     autoDeploy: true
-    branch: main
