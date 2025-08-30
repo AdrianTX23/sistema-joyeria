@@ -317,9 +317,7 @@ router.get('/products', authenticateToken, (req, res) => {
         c.name as category_name,
         COALESCE(SUM(si.quantity), 0) as units_sold,
         COALESCE(SUM(si.total_price), 0) as revenue,
-        COALESCE(COUNT(DISTINCT s.id), 0) as sale_count,
-        (p.stock_quantity * p.cost) as inventory_value,
-        (p.stock_quantity * p.price) as retail_value
+        COALESCE(COUNT(DISTINCT s.id), 0) as sale_count
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN sale_items si ON p.id = si.product_id
@@ -337,21 +335,17 @@ router.get('/products', authenticateToken, (req, res) => {
 
       // Calculate summary
       const summary = products.reduce((acc, product) => {
-        acc.totalRevenue += parseFloat(product.revenue);
-        acc.totalUnitsSold += product.units_sold;
-        acc.totalInventoryValue += parseFloat(product.inventory_value);
-        acc.totalRetailValue += parseFloat(product.retail_value);
+        acc.totalRevenue += parseFloat(product.revenue || 0);
+        acc.totalUnitsSold += parseInt(product.units_sold || 0);
         return acc;
-      }, { totalRevenue: 0, totalUnitsSold: 0, totalInventoryValue: 0, totalRetailValue: 0 });
+      }, { totalRevenue: 0, totalUnitsSold: 0 });
 
       res.json({
         period,
         products,
         summary: {
           ...summary,
-          totalRevenue: summary.totalRevenue.toFixed(2),
-          totalInventoryValue: summary.totalInventoryValue.toFixed(2),
-          totalRetailValue: summary.totalRetailValue.toFixed(2)
+          totalRevenue: summary.totalRevenue.toFixed(2)
         }
       });
     });
@@ -393,9 +387,7 @@ router.get('/categories', authenticateToken, (req, res) => {
         COUNT(DISTINCT p.id) as product_count,
         COALESCE(SUM(si.quantity), 0) as units_sold,
         COALESCE(SUM(si.total_price), 0) as revenue,
-        COALESCE(COUNT(DISTINCT s.id), 0) as sale_count,
-        COALESCE(SUM(p.stock_quantity), 0) as current_stock,
-        COALESCE(SUM(p.stock_quantity * p.cost), 0) as inventory_value
+        COALESCE(COUNT(DISTINCT s.id), 0) as sale_count
       FROM categories c
       LEFT JOIN products p ON c.id = p.category_id
       LEFT JOIN sale_items si ON p.id = si.product_id
@@ -412,20 +404,18 @@ router.get('/categories', authenticateToken, (req, res) => {
 
       // Calculate summary
       const summary = categories.reduce((acc, category) => {
-        acc.totalRevenue += parseFloat(category.revenue);
-        acc.totalUnitsSold += category.units_sold;
-        acc.totalProducts += category.product_count;
-        acc.totalInventoryValue += parseFloat(category.inventory_value);
+        acc.totalRevenue += parseFloat(category.revenue || 0);
+        acc.totalUnitsSold += parseInt(category.units_sold || 0);
+        acc.totalProducts += parseInt(category.product_count || 0);
         return acc;
-      }, { totalRevenue: 0, totalUnitsSold: 0, totalProducts: 0, totalInventoryValue: 0 });
+      }, { totalRevenue: 0, totalUnitsSold: 0, totalProducts: 0 });
 
       res.json({
         period,
         categories,
         summary: {
           ...summary,
-          totalRevenue: summary.totalRevenue.toFixed(2),
-          totalInventoryValue: summary.totalInventoryValue.toFixed(2)
+          totalRevenue: summary.totalRevenue.toFixed(2)
         }
       });
     });

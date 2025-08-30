@@ -93,7 +93,23 @@ app.use('/api/backup', backupRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Jewelry Inventory System API is running' });
+  try {
+    console.log('✅ Health check requested');
+    res.json({ 
+      status: 'OK', 
+      message: 'Jewelry Inventory System API is running',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    console.error('❌ Health check failed:', error);
+    res.status(503).json({ 
+      status: 'ERROR', 
+      message: 'Service unavailable',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
 });
 
 // Serve static files from React build in production
