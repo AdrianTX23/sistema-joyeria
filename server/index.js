@@ -15,7 +15,33 @@ const categoryRoutes = require('./routes/categories');
 const backupRoutes = require('./routes/backup');
 
 // Import database initialization
+const { initDatabase, closeDatabase } = require('./database/init');
 const { initPostgresDatabase, closePostgresDatabase } = require('./database/postgres-init');
+
+// Función para detectar qué base de datos usar
+async function initializeDatabase() {
+  // Verificar si DATABASE_URL está configurado
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql')) {
+    try {
+      console.log('🗄️ Intentando conectar a PostgreSQL...');
+      await initPostgresDatabase();
+      console.log('✅ PostgreSQL inicializado correctamente');
+      return 'postgresql';
+    } catch (error) {
+      console.error('❌ Error conectando a PostgreSQL:', error.message);
+      console.log('🔄 Fallback a SQLite...');
+    }
+  }
+  
+  // Fallback a SQLite
+  console.log('🗄️ Inicializando SQLite...');
+  await initDatabase();
+  console.log('✅ SQLite inicializado correctamente');
+  return 'sqlite';
+}
+
+// Variable global para trackear qué BD estamos usando
+let currentDatabase = null;
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -177,25 +203,41 @@ if (process.env.NODE_ENV !== 'production') {
 // Manejar señales de terminación
 process.on('SIGINT', () => {
   console.log('\n🛑 Recibida señal SIGINT, cerrando servidor...');
-  closePostgresDatabase();
+  if (currentDatabase === 'postgresql') {
+    closePostgresDatabase();
+  } else {
+    closeDatabase();
+  }
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n🛑 Recibida señal SIGTERM, cerrando servidor...');
-  closePostgresDatabase();
+  if (currentDatabase === 'postgresql') {
+    closePostgresDatabase();
+  } else {
+    closeDatabase();
+  }
   process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('❌ Excepción no capturada:', err);
-  closePostgresDatabase();
+  if (currentDatabase === 'postgresql') {
+    closePostgresDatabase();
+  } else {
+    closeDatabase();
+  }
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Promesa rechazada no manejada:', reason);
-  closePostgresDatabase();
+  if (currentDatabase === 'postgresql') {
+    closePostgresDatabase();
+  } else {
+    closeDatabase();
+  }
   process.exit(1);
 });
 
@@ -203,7 +245,7 @@ process.on('unhandledRejection', (reason, promise) => {
 async function startServer() {
   try {
     console.log('🔧 Inicializando base de datos...');
-    await initPostgresDatabase();
+    currentDatabase = await initializeDatabase();
     console.log('✅ Base de datos inicializada correctamente');
     
     const server = app.listen(PORT, () => {

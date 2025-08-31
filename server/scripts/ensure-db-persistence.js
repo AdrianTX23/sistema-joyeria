@@ -1,12 +1,38 @@
 #!/usr/bin/env node
 
 const { getDatabase, syncDatabase } = require('../database/init');
+const { getPostgresDatabase } = require('../database/postgres-init');
 const path = require('path');
 const fs = require('fs');
 
 async function ensurePersistence() {
   console.log('🔧 Configurando persistencia de base de datos...');
   
+  // Detectar qué base de datos usar
+  const usePostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgresql');
+  
+  if (usePostgres) {
+    console.log('🗄️ Usando PostgreSQL...');
+    try {
+      const pool = getPostgresDatabase();
+      const client = await pool.connect();
+      
+      console.log('✅ Conectado a PostgreSQL');
+      console.log('✅ PostgreSQL ya tiene persistencia nativa');
+      
+      client.release();
+    } catch (error) {
+      console.error('❌ Error conectando a PostgreSQL:', error.message);
+      console.log('🔄 Fallback a SQLite...');
+      await configureSQLite();
+    }
+  } else {
+    console.log('🗄️ Usando SQLite...');
+    await configureSQLite();
+  }
+}
+
+async function configureSQLite() {
   try {
     const db = getDatabase();
     
