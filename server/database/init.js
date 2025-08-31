@@ -232,20 +232,6 @@ async function initDatabase() {
           password: 'Genesis0311',
           role: 'administrador',
           full_name: 'Genesis Barceló - Administradora'
-        },
-        {
-          username: 'vendedor1',
-          email: 'vendedor1@joyeria.com',
-          password: 'vendedor123',
-          role: 'vendedor',
-          full_name: 'María González - Vendedora'
-        },
-        {
-          username: 'vendedor2',
-          email: 'vendedor2@joyeria.com',
-          password: 'vendedor123',
-          role: 'vendedor',
-          full_name: 'Carlos Rodríguez - Vendedor'
         }
       ];
 

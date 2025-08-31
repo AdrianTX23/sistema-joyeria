@@ -34,8 +34,10 @@ const upload = multer({
 });
 
 // Get all products with pagination and filters
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
+    console.log('📦 Petición GET /api/products recibida:', req.query);
+    
     const { page = 1, limit = 10, search = '', category = '', lowStock = false } = req.query;
     const offset = (page - 1) * limit;
     
@@ -72,32 +74,29 @@ router.get('/', authenticateToken, (req, res) => {
     query += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), offset);
 
-    executeQuery(countQuery, countParams, (err, countResult) => {
-      if (err) {
-        console.error('Database error getting product count:', err);
-        return res.status(500).json({ error: 'Database error' });
+    console.log('🔍 Ejecutando consulta de conteo:', countQuery, countParams);
+    const countResult = await executeQuerySingle(countQuery, countParams);
+    
+    console.log('🔍 Ejecutando consulta de productos:', query, params);
+    const products = await executeQuery(query, params);
+
+    console.log('✅ Productos obtenidos:', {
+      count: products.length,
+      total: countResult.total
+    });
+
+    res.json({
+      products,
+      pagination: {
+        current: parseInt(page),
+        total: Math.ceil(countResult.total / limit),
+        totalItems: countResult.total,
+        limit: parseInt(limit)
       }
-
-      executeQuery(query, params, (err, products) => {
-        if (err) {
-          console.error('Database error getting products:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        res.json({
-          products,
-          pagination: {
-            current: parseInt(page),
-            total: Math.ceil(countResult.total / limit),
-            totalItems: countResult.total,
-            limit: parseInt(limit)
-          }
-        });
-      });
     });
   } catch (error) {
-    console.error('Get products error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error obteniendo productos:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 

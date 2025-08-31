@@ -180,20 +180,6 @@ async function insertDefaultData(client) {
         password: bcrypt.hashSync('Genesis0311', 10),
         role: 'administrador',
         full_name: 'Genesis Barceló - Administradora'
-      },
-      {
-        username: 'vendedor1',
-        email: 'vendedor1@joyeria.com',
-        password: bcrypt.hashSync('vendedor123', 10),
-        role: 'vendedor',
-        full_name: 'María González - Vendedora'
-      },
-      {
-        username: 'vendedor2',
-        email: 'vendedor2@joyeria.com',
-        password: bcrypt.hashSync('vendedor123', 10),
-        role: 'vendedor',
-        full_name: 'Carlos Rodríguez - Vendedor'
       }
     ];
 

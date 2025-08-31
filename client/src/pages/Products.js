@@ -28,10 +28,11 @@ const Products = () => {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-  }, [currentPage, searchTerm, selectedCategory, lowStockFilter]);
+  }, []);
 
   const fetchProducts = async () => {
     try {
+      console.log('📦 Iniciando fetch de productos...');
       setLoading(true);
       const params = new URLSearchParams({
         page: currentPage,
@@ -41,11 +42,23 @@ const Products = () => {
         lowStock: lowStockFilter,
       });
 
+      console.log('📡 Enviando petición a:', `/api/products?${params}`);
       const response = await axios.get(`/api/products?${params}`);
+      
+      console.log('✅ Respuesta de productos recibida:', {
+        status: response.status,
+        productsCount: response.data.products?.length || 0,
+        hasPagination: !!response.data.pagination
+      });
+      
       setProducts(response.data.products);
-      setTotalPages(response.data.pagination.total);
+      setTotalPages(response.data.pagination?.total || 1);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('❌ Error fetching products:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
     } finally {
       setLoading(false);
     }
