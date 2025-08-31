@@ -19,7 +19,7 @@ async function executeQuery(query, params = []) {
     const client = await pool.connect();
     try {
       const result = await client.query(query, params);
-      return result;
+      return result.rows;
     } finally {
       client.release();
     }
@@ -30,7 +30,7 @@ async function executeQuery(query, params = []) {
         if (err) {
           reject(err);
         } else {
-          resolve({ rows });
+          resolve(rows);
         }
       });
     });

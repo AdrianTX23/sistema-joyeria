@@ -44,7 +44,7 @@ router.get('/test', (req, res) => {
 });
 
 // Get all products with pagination and filters
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     console.log('📦 Petición GET /api/products recibida:', req.query);
     
@@ -86,13 +86,17 @@ router.get('/', authenticateToken, async (req, res) => {
 
     console.log('🔍 Ejecutando consulta de conteo:', countQuery, countParams);
     const countResult = await executeQuerySingle(countQuery, countParams);
+    console.log('📊 Resultado de conteo:', countResult);
     
     console.log('🔍 Ejecutando consulta de productos:', query, params);
     const products = await executeQuery(query, params);
+    console.log('📦 Productos obtenidos:', products);
 
     console.log('✅ Productos obtenidos:', {
       count: products.length,
-      total: countResult.total
+      total: countResult.total,
+      productsType: typeof products,
+      isArray: Array.isArray(products)
     });
 
     res.json({
