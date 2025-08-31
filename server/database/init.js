@@ -9,7 +9,7 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-const dbPath = path.join(__dirname, 'jewelry_inventory.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'jewelry_inventory.db');
 console.log('🗄️ Database path:', dbPath);
 
 // Verificar si la base de datos existe
@@ -326,6 +326,18 @@ function closeDatabase() {
   }
 }
 
+// Función para forzar la sincronización de la base de datos
+function syncDatabase() {
+  if (db) {
+    try {
+      db.run('PRAGMA wal_checkpoint(TRUNCATE)');
+      console.log('✅ Database synchronized');
+    } catch (error) {
+      console.error('❌ Error syncing database:', error);
+    }
+  }
+}
+
 // Manejar señales de terminación para cerrar la base de datos correctamente
 process.on('SIGINT', () => {
   console.log('\n🛑 Received SIGINT, closing database...');
@@ -339,4 +351,4 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-module.exports = { initDatabase, getDatabase, closeDatabase };
+module.exports = { initDatabase, getDatabase, closeDatabase, syncDatabase };

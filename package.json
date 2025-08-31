@@ -16,7 +16,7 @@
     "build:full": "npm run install-all && cd client && npm run build",
     "serve:full": "cd server && npm start",
     "render-build": "echo 'Installing dependencies...' && npm install && echo 'Installing server dependencies...' && cd server && npm install && echo 'Installing client dependencies...' && cd ../client && npm install && echo 'Building client...' && npm run build && echo 'Build completed successfully!'",
-    "render-start": "echo 'Starting server...' && cd server && npm start",
+    "render-start": "echo 'Configurando persistencia...' && npm run check-db && echo 'Starting server...' && cd server && npm start",
     "check-db": "node server/scripts/ensure-db-persistence.js",
     "db-info": "cd server && node -e \"const { getDatabase } = require('./database/init'); const db = getDatabase(); db.all('SELECT name FROM sqlite_master WHERE type=\\'table\\'', (err, tables) => { if(err) console.error(err); else console.log('Tables:', tables.map(t => t.name)); db.close(); });\"",
     "db-backup": "cd server && node -e \"const { exec } = require('child_process'); const path = require('path'); const dbPath = path.join(__dirname, 'database/jewelry_inventory.db'); const backupPath = path.join(__dirname, 'backups', 'manual-backup-' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.db'); exec('cp \"' + dbPath + '\" \"' + backupPath + '\"', (err) => { if(err) console.error('Backup error:', err); else console.log('Backup created:', backupPath); });\"",

@@ -181,6 +181,10 @@ router.post('/', authenticateToken, (req, res) => {
               console.error('Database error getting new product:', err);
               return res.status(500).json({ error: 'Database error' });
             }
+            
+            // Sincronizar la base de datos después de crear el producto
+            // syncDatabase(); // This line was removed as per the edit hint
+            
             res.status(201).json({ 
               message: 'Product created successfully',
               product: newProduct 

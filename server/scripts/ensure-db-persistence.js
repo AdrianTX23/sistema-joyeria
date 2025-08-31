@@ -1,121 +1,116 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
+const { getDatabase, syncDatabase } = require('../database/init');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
 
-// Configuración de la base de datos
-const dbPath = path.join(__dirname, '../database/jewelry_inventory.db');
-const dbDir = path.dirname(dbPath);
-
-console.log('🔍 Verificando persistencia de la base de datos...');
-console.log('📁 Directorio de la BD:', dbDir);
-console.log('🗄️ Ruta de la BD:', dbPath);
-
-// Verificar si el directorio existe
-if (!fs.existsSync(dbDir)) {
-  console.log('📁 Creando directorio de la base de datos...');
-  fs.mkdirSync(dbDir, { recursive: true });
-  console.log('✅ Directorio creado');
-} else {
-  console.log('✅ Directorio de la BD existe');
-}
-
-// Verificar si la base de datos existe
-const dbExists = fs.existsSync(dbPath);
-console.log('📁 Base de datos existe:', dbExists);
-
-if (dbExists) {
-  // Verificar el tamaño de la base de datos
-  const stats = fs.statSync(dbPath);
-  const fileSizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-  console.log(`💾 Tamaño de la BD: ${fileSizeInMB} MB`);
+async function ensurePersistence() {
+  console.log('🔧 Configurando persistencia de base de datos...');
   
-  // Verificar permisos de escritura
   try {
-    fs.accessSync(dbPath, fs.constants.R_OK | fs.constants.W_OK);
-    console.log('✅ Permisos de lectura/escritura OK');
-  } catch (err) {
-    console.error('❌ Error de permisos:', err.message);
-  }
-  
-  // Verificar integridad de la base de datos
-  const db = new sqlite3.Database(dbPath);
-  
-  db.get("PRAGMA integrity_check", (err, row) => {
-    if (err) {
-      console.error('❌ Error verificando integridad:', err);
-    } else {
-      console.log('🔍 Resultado de integridad:', row.integrity_check);
-      if (row.integrity_check === 'ok') {
-        console.log('✅ Base de datos íntegra');
-      } else {
-        console.log('⚠️ Problemas de integridad detectados');
-      }
-    }
+    const db = getDatabase();
     
-    // Verificar tablas existentes
-    db.all("SELECT name FROM sqlite_master WHERE type='table'", (err, tables) => {
+    // Configurar SQLite para máxima persistencia
+    console.log('📝 Configurando SQLite para persistencia...');
+    
+    // Cambiar a modo DELETE para mejor compatibilidad con sistemas de archivos efímeros
+    db.run('PRAGMA journal_mode = DELETE', (err) => {
       if (err) {
-        console.error('❌ Error obteniendo tablas:', err);
+        console.error('❌ Error configurando journal_mode:', err);
       } else {
-        console.log('📊 Tablas encontradas:', tables.length);
-        tables.forEach(table => {
-          console.log(`  - ${table.name}`);
-        });
+        console.log('✅ Journal mode configurado a DELETE');
       }
-      
-      // Verificar datos en las tablas principales
-      const checkTable = (tableName, description) => {
-        db.get(`SELECT COUNT(*) as count FROM ${tableName}`, (err, row) => {
-          if (err) {
-            console.log(`❌ Error verificando ${tableName}:`, err.message);
-          } else {
-            console.log(`📊 ${description}: ${row.count} registros`);
-          }
-        });
-      };
-      
-      checkTable('users', 'Usuarios');
-      checkTable('categories', 'Categorías');
-      checkTable('products', 'Productos');
-      checkTable('sales', 'Ventas');
-      
-      // Cerrar conexión
-      db.close((err) => {
-        if (err) {
-          console.error('❌ Error cerrando BD:', err);
-        } else {
-          console.log('✅ Conexión cerrada');
-        }
-        
-        console.log('\n🎯 Resumen de verificación:');
-        console.log(`📁 BD existe: ${dbExists}`);
-        console.log(`💾 Tamaño: ${fileSizeInMB} MB`);
-        console.log('✅ Verificación completada');
-      });
     });
-  });
-  
-} else {
-  console.log('⚠️ La base de datos no existe. Se creará al iniciar el servidor.');
+    
+    // Configurar synchronous a FULL para máxima seguridad
+    db.run('PRAGMA synchronous = FULL', (err) => {
+      if (err) {
+        console.error('❌ Error configurando synchronous:', err);
+      } else {
+        console.log('✅ Synchronous configurado a FULL');
+      }
+    });
+    
+    // Configurar cache size
+    db.run('PRAGMA cache_size = 10000', (err) => {
+      if (err) {
+        console.error('❌ Error configurando cache_size:', err);
+      } else {
+        console.log('✅ Cache size configurado');
+      }
+    });
+    
+    // Configurar temp store
+    db.run('PRAGMA temp_store = MEMORY', (err) => {
+      if (err) {
+        console.error('❌ Error configurando temp_store:', err);
+      } else {
+        console.log('✅ Temp store configurado');
+      }
+    });
+    
+    // Habilitar foreign keys
+    db.run('PRAGMA foreign_keys = ON', (err) => {
+      if (err) {
+        console.error('❌ Error configurando foreign_keys:', err);
+      } else {
+        console.log('✅ Foreign keys habilitados');
+      }
+    });
+    
+    // Forzar checkpoint
+    db.run('PRAGMA wal_checkpoint(TRUNCATE)', (err) => {
+      if (err) {
+        console.error('❌ Error forzando checkpoint:', err);
+      } else {
+        console.log('✅ Checkpoint forzado');
+      }
+    });
+    
+    // Verificar configuración
+    setTimeout(() => {
+      console.log('🔍 Verificando configuración...');
+      
+      db.get('PRAGMA journal_mode', (err, result) => {
+        if (err) {
+          console.error('❌ Error verificando journal_mode:', err);
+        } else {
+          console.log(`📝 Journal mode actual: ${result.journal_mode}`);
+        }
+      });
+      
+      db.get('PRAGMA synchronous', (err, result) => {
+        if (err) {
+          console.error('❌ Error verificando synchronous:', err);
+        } else {
+          console.log(`🔄 Synchronous actual: ${result.synchronous}`);
+        }
+      });
+      
+      // Verificar datos existentes
+      db.get('SELECT COUNT(*) as count FROM products', (err, result) => {
+        if (err) {
+          console.error('❌ Error contando productos:', err);
+        } else {
+          console.log(`📦 Productos en BD: ${result.count}`);
+        }
+      });
+      
+      db.get('SELECT COUNT(*) as count FROM sales', (err, result) => {
+        if (err) {
+          console.error('❌ Error contando ventas:', err);
+        } else {
+          console.log(`💰 Ventas en BD: ${result.count}`);
+        }
+      });
+      
+      console.log('✅ Configuración de persistencia completada');
+    }, 1000);
+    
+  } catch (error) {
+    console.error('❌ Error configurando persistencia:', error);
+  }
 }
 
-// Verificar variables de entorno
-console.log('\n🌍 Variables de entorno:');
-console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
-console.log('PORT:', process.env.PORT || '5001');
-
-// Verificar directorio de trabajo
-console.log('\n📂 Directorio de trabajo actual:', process.cwd());
-
-// Verificar espacio en disco
-try {
-  const stats = fs.statfsSync(dbDir);
-  const freeSpaceGB = (stats.bavail * stats.bsize / (1024 * 1024 * 1024)).toFixed(2);
-  console.log(`💽 Espacio libre en disco: ${freeSpaceGB} GB`);
-} catch (err) {
-  console.log('⚠️ No se pudo verificar espacio en disco:', err.message);
-}
-
-console.log('\n✅ Verificación de persistencia completada');
+// Ejecutar configuración
+ensurePersistence();
