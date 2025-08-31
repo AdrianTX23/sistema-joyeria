@@ -11,6 +11,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner';
 import ProductModal from '../components/ProductModal';
 import StockModal from '../components/StockModal';
+import BackendTest from '../components/BackendTest';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -24,6 +25,7 @@ const Products = () => {
   const [showStockModal, setShowStockModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -34,6 +36,8 @@ const Products = () => {
     try {
       console.log('📦 Iniciando fetch de productos...');
       setLoading(true);
+      setError(null);
+      
       const params = new URLSearchParams({
         page: currentPage,
         limit: 10,
@@ -48,17 +52,24 @@ const Products = () => {
       console.log('✅ Respuesta de productos recibida:', {
         status: response.status,
         productsCount: response.data.products?.length || 0,
-        hasPagination: !!response.data.pagination
+        hasPagination: !!response.data.pagination,
+        data: response.data
       });
       
-      setProducts(response.data.products);
-      setTotalPages(response.data.pagination?.total || 1);
+      if (response.data.products) {
+        setProducts(response.data.products);
+        setTotalPages(response.data.pagination?.total || 1);
+      } else {
+        console.error('❌ Respuesta sin productos:', response.data);
+        setError('Error: Respuesta sin datos de productos');
+      }
     } catch (error) {
       console.error('❌ Error fetching products:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status
       });
+      setError(error.response?.data?.error || 'Error al cargar productos');
     } finally {
       setLoading(false);
     }
@@ -107,10 +118,59 @@ const Products = () => {
     return { status: 'ok', text: 'En Stock', color: 'success' };
   };
 
-  if (loading && products.length === 0) {
+  console.log('🔄 Renderizando Products:', {
+    loading,
+    productsCount: products.length,
+    categoriesCount: categories.length,
+    showProductModal,
+    showStockModal
+  });
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="lg" />
+        <div className="ml-4">
+          <p className="text-gray-600">Cargando productos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
+            <p className="text-gray-600 mt-1">
+              Gestiona tu inventario de joyería
+            </p>
+          </div>
+        </div>
+        
+        <div className="card">
+          <div className="card-body">
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center">
+                <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Error al cargar productos
+                </h3>
+                <p className="text-gray-600 mb-4">{error}</p>
+                <button
+                  onClick={() => {
+                    setError(null);
+                    fetchProducts();
+                  }}
+                  className="btn btn-primary"
+                >
+                  Reintentar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -133,6 +193,9 @@ const Products = () => {
           Agregar Producto
         </button>
       </div>
+
+      {/* Temporary Backend Test */}
+      <BackendTest />
 
       {/* Filters */}
       <div className="card">

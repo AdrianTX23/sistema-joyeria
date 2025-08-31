@@ -33,6 +33,16 @@ const upload = multer({
   }
 });
 
+// Test endpoint to verify backend is working
+router.get('/test', (req, res) => {
+  console.log('🧪 Test endpoint /api/products/test called');
+  res.json({ 
+    message: 'Products backend is working',
+    timestamp: new Date().toISOString(),
+    database: process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite'
+  });
+});
+
 // Get all products with pagination and filters
 router.get('/', authenticateToken, async (req, res) => {
   try {
