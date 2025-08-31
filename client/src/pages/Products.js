@@ -38,7 +38,15 @@ const Products = () => {
       const response = await axios.get('/api/products');
       console.log('✅ Products response:', response.data);
       
-      setProducts(response.data.products || []);
+      // Asegurar que products sea siempre un array
+      const productsData = response.data.products;
+      if (Array.isArray(productsData)) {
+        setProducts(productsData);
+      } else {
+        console.error('❌ Products response is not an array:', productsData);
+        setProducts([]);
+        setError('Error: Respuesta del servidor no válida');
+      }
     } catch (error) {
       console.error('❌ Products fetch error:', error);
       setError(error.response?.data?.error || 'Error loading products');
@@ -52,7 +60,15 @@ const Products = () => {
       console.log('📂 Starting categories fetch...');
       const response = await axios.get('/api/categories');
       console.log('✅ Categories response:', response.data);
-      setCategories(response.data.categories || []);
+      
+      // Asegurar que categories sea siempre un array
+      const categoriesData = response.data.categories;
+      if (Array.isArray(categoriesData)) {
+        setCategories(categoriesData);
+      } else {
+        console.error('❌ Categories response is not an array:', categoriesData);
+        setCategories([]);
+      }
     } catch (error) {
       console.error('❌ Categories fetch error:', error);
     }
@@ -149,7 +165,15 @@ const Products = () => {
           <div className="card-body">
             <h3 className="text-lg font-semibold mb-4">Lista de Productos</h3>
             
-            {products.length === 0 ? (
+            {!Array.isArray(products) ? (
+              <div className="text-center py-8">
+                <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                <p className="text-gray-600">Error: products no es un array</p>
+                <pre className="text-xs mt-2 bg-gray-100 p-2 rounded">
+                  {JSON.stringify(products, null, 2)}
+                </pre>
+              </div>
+            ) : products.length === 0 ? (
               <div className="text-center py-8">
                 <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">No hay productos registrados</p>
