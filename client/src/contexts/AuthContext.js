@@ -179,32 +179,58 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (username, password, rememberMe = false) => {
-    console.log('🔐 Login attempt for user:', username, 'Remember me:', rememberMe);
-    dispatch({ type: 'LOGIN_START' });
-    
+    console.log('🔐 Iniciando proceso de login...', {
+      username,
+      password: password ? '***' : 'undefined',
+      rememberMe,
+      timestamp: new Date().toISOString()
+    });
+
     try {
+      dispatch({ type: 'LOGIN_START' });
+      // setLoading(true); // This line was removed from the new_code, so it's removed here.
+      // setError(null); // This line was removed from the new_code, so it's removed here.
+
+      console.log('📡 Enviando petición de login...');
+      
       const response = await axios.post('/api/auth/login', {
         username,
         password,
+        rememberMe
       });
 
-      const { user, token } = response.data;
-      console.log('✅ Login successful:', user);
-      
-      // Si "recordar sesión" está marcado, usar localStorage (persistente)
-      // Si no, usar sessionStorage (temporal, se pierde al cerrar la página)
+      console.log('✅ Respuesta de login recibida:', {
+        status: response.status,
+        hasToken: !!response.data.token,
+        hasUser: !!response.data.user,
+        userRole: response.data.user?.role
+      });
+
+      const { token, user } = response.data;
+
+      // Guardar token y datos del usuario
       if (rememberMe) {
+        console.log('💾 Guardando sesión persistente en localStorage');
         localStorage.setItem('token', token);
-        localStorage.removeItem('sessionToken'); // Limpiar token de sesión si existe
-        console.log('💾 Token saved to localStorage (persistent)');
+        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('sessionType', 'persistente');
       } else {
+        console.log('💾 Guardando sesión temporal en sessionStorage');
         sessionStorage.setItem('token', token);
-        localStorage.removeItem('token'); // Limpiar token persistente si existe
-        console.log('💾 Token saved to sessionStorage (temporary)');
+        sessionStorage.setItem('user', JSON.stringify(user));
+        sessionStorage.setItem('sessionType', 'temporal');
       }
-      
+
+      // Configurar axios para futuras peticiones
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
+
+      console.log('👤 Usuario autenticado:', {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        email: user.email
+      });
+
       dispatch({
         type: 'LOGIN_SUCCESS',
         payload: { user, token },
@@ -213,7 +239,13 @@ export const AuthProvider = ({ children }) => {
       toast.success(`Bienvenido, ${user.fullName}!`);
       return { success: true };
     } catch (error) {
-      console.error('❌ Login failed:', error.response?.data || error.message);
+      console.error('❌ Error en login:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        timestamp: new Date().toISOString()
+      });
+
       const message = error.response?.data?.error || 'Error al iniciar sesión';
       toast.error(message);
       dispatch({ type: 'LOGIN_FAILURE' });

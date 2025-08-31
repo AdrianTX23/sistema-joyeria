@@ -26,39 +26,68 @@ const authenticateToken = (req, res, next) => {
 
 // Login route
 router.post('/login', async (req, res) => {
+  console.log('🔐 Intento de login recibido:', {
+    username: req.body.username,
+    email: req.body.email,
+    timestamp: new Date().toISOString()
+  });
+
   try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
-    }
-
-    const user = await executeQuerySingle(
-      'SELECT * FROM users WHERE username = ? OR email = ?',
-      [username, username]
-    );
+    const { username, email, password, rememberMe } = req.body;
     
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!username && !email) {
+      console.log('❌ Login fallido: No se proporcionó username ni email');
+      return res.status(400).json({ error: 'Se requiere username o email' });
+    }
+    
+    if (!password) {
+      console.log('❌ Login fallido: No se proporcionó contraseña');
+      return res.status(400).json({ error: 'Se requiere contraseña' });
     }
 
+    // Buscar usuario por username o email
+    const searchField = username ? 'username' : 'email';
+    const searchValue = username || email;
+    
+    console.log(`🔍 Buscando usuario por ${searchField}: ${searchValue}`);
+    
+    const user = await executeQuerySingle(
+      `SELECT * FROM users WHERE ${searchField} = ?`,
+      [searchValue]
+    );
+
+    if (!user) {
+      console.log(`❌ Usuario no encontrado: ${searchValue}`);
+      return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+
+    console.log(`✅ Usuario encontrado: ${user.username} (${user.role})`);
+
+    // Verificar contraseña
     const isValidPassword = await bcrypt.compare(password, user.password);
     
     if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.log(`❌ Contraseña incorrecta para usuario: ${user.username}`);
+      return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
+    console.log(`✅ Contraseña válida para usuario: ${user.username}`);
+
+    // Generar token JWT
     const token = jwt.sign(
       { 
-        id: user.id, 
+        userId: user.id, 
         username: user.username, 
         role: user.role,
-        fullName: user.full_name 
+        email: user.email 
       },
-      JWT_SECRET,
+      process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
-    
+
+    console.log(`🎫 Token JWT generado para: ${user.username}`);
+
+    // Respuesta exitosa
     res.json({
       token,
       user: {
@@ -66,12 +95,16 @@ router.post('/login', async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
-        fullName: user.full_name
-      }
+        full_name: user.full_name
+      },
+      rememberMe: rememberMe || false
     });
+
+    console.log(`✅ Login exitoso para: ${user.username} (${user.role})`);
+
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error en login:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
