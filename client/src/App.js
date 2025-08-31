@@ -9,6 +9,7 @@ import Reports from './pages/Reports';
 import Backup from './pages/Backup';
 import Users from './pages/Users';
 import TestResponsive from './pages/TestResponsive';
+import SimpleTest from './components/SimpleTest';
 
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -38,7 +39,16 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/products" element={<Products />} />
+        <Route 
+          path="/products" 
+          element={
+            <div>
+              {console.log('🎯 App.js - Rendering Products route')}
+              <SimpleTest />
+              <Products />
+            </div>
+          } 
+        />
         <Route path="/sales" element={<Sales />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/backup" element={<Backup />} />
