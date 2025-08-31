@@ -15,7 +15,7 @@ const categoryRoutes = require('./routes/categories');
 const backupRoutes = require('./routes/backup');
 
 // Import database initialization
-const { initDatabase, closeDatabase } = require('./database/init');
+const { initPostgresDatabase, closePostgresDatabase } = require('./database/postgres-init');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -177,25 +177,25 @@ if (process.env.NODE_ENV !== 'production') {
 // Manejar señales de terminación
 process.on('SIGINT', () => {
   console.log('\n🛑 Recibida señal SIGINT, cerrando servidor...');
-  closeDatabase();
+  closePostgresDatabase();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n🛑 Recibida señal SIGTERM, cerrando servidor...');
-  closeDatabase();
+  closePostgresDatabase();
   process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('❌ Excepción no capturada:', err);
-  closeDatabase();
+  closePostgresDatabase();
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Promesa rechazada no manejada:', reason);
-  closeDatabase();
+  closePostgresDatabase();
   process.exit(1);
 });
 
@@ -203,7 +203,7 @@ process.on('unhandledRejection', (reason, promise) => {
 async function startServer() {
   try {
     console.log('🔧 Inicializando base de datos...');
-    await initDatabase();
+    await initPostgresDatabase();
     console.log('✅ Base de datos inicializada correctamente');
     
     const server = app.listen(PORT, () => {
@@ -229,7 +229,7 @@ async function startServer() {
     // Manejar conexiones cerradas
     server.on('close', () => {
       console.log('🛑 Server is shutting down');
-      closeDatabase();
+      closePostgresDatabase();
     });
 
   } catch (error) {

@@ -10,19 +10,13 @@ services:
         value: production
       - key: NODE_OPTIONS
         value: --max-old-space-size=512
+      - key: DB_PERSISTENCE
+        value: true
+      - key: DB_PATH
+        value: ./database/jewelry_inventory.db
       - key: JWT_SECRET
         generateValue: true
       - key: PORT
         value: 10000
-      - key: DATABASE_URL
-        fromDatabase:
-          name: sistema-joyeria-db
-          property: connectionString
     healthCheckPath: /api/health
     autoDeploy: true
-
-  - type: pserv
-    name: sistema-joyeria-db
-    env: postgresql
-    plan: free
-    ipAllowList: []

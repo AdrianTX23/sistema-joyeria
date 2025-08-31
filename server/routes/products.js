@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const { getDatabase } = require('../database/init');
+const { executeQuery, executeQuerySingle, executeCommand } = require('../database/db-adapter');
 const { authenticateToken } = require('./auth');
 
 const router = express.Router();
@@ -72,15 +72,13 @@ router.get('/', authenticateToken, (req, res) => {
     query += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), offset);
 
-    const db = getDatabase();
-    
-    db.get(countQuery, countParams, (err, countResult) => {
+    executeQuery(countQuery, countParams, (err, countResult) => {
       if (err) {
         console.error('Database error getting product count:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
-      db.all(query, params, (err, products) => {
+      executeQuery(query, params, (err, products) => {
         if (err) {
           console.error('Database error getting products:', err);
           return res.status(500).json({ error: 'Database error' });
@@ -107,9 +105,8 @@ router.get('/', authenticateToken, (req, res) => {
 router.get('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
     
-    db.get(
+    executeQuerySingle(
       `SELECT p.*, c.name as category_name 
        FROM products p 
        LEFT JOIN categories c ON p.category_id = c.id 
@@ -153,15 +150,13 @@ router.post('/', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'SKU, name, price, and cost are required' });
     }
 
-    const db = getDatabase();
-    
-    db.run(
+    executeCommand(
       `INSERT INTO products (
         sku, name, description, category_id, price, cost, 
         stock_quantity, min_stock_level, weight, dimensions, material
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [sku, name, description, category_id, price, cost, stock_quantity || 0, min_stock_level || 5, weight, dimensions, material],
-      function(err) {
+      (err) => {
         if (err) {
           console.error('Database error creating product:', err);
           if (err.message.includes('UNIQUE constraint failed')) {
@@ -170,7 +165,7 @@ router.post('/', authenticateToken, (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
 
-        db.get(
+        executeQuerySingle(
           `SELECT p.*, c.name as category_name 
            FROM products p 
            LEFT JOIN categories c ON p.category_id = c.id 
@@ -221,16 +216,14 @@ router.put('/:id', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'SKU, name, price, and cost are required' });
     }
 
-    const db = getDatabase();
-    
-    db.run(
+    executeCommand(
       `UPDATE products SET 
         sku = ?, name = ?, description = ?, category_id = ?, 
         price = ?, cost = ?, stock_quantity = ?, min_stock_level = ?, 
         weight = ?, dimensions = ?, material = ?, updated_at = CURRENT_TIMESTAMP 
        WHERE id = ?`,
       [sku, name, description, category_id, price, cost, stock_quantity, min_stock_level, weight, dimensions, material, id],
-      function(err) {
+      (err) => {
         if (err) {
           console.error('Database error updating product:', err);
           if (err.message.includes('UNIQUE constraint failed')) {
@@ -243,7 +236,7 @@ router.put('/:id', authenticateToken, (req, res) => {
           return res.status(404).json({ error: 'Product not found' });
         }
 
-        db.get(
+        executeQuerySingle(
           `SELECT p.*, c.name as category_name 
            FROM products p 
            LEFT JOIN categories c ON p.category_id = c.id 
@@ -278,10 +271,8 @@ router.patch('/:id/stock', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Quantity must be a number' });
     }
 
-    const db = getDatabase();
-    
     // Get current stock
-    db.get('SELECT stock_quantity FROM products WHERE id = ?', [id], (err, product) => {
+    executeQuerySingle('SELECT stock_quantity FROM products WHERE id = ?', [id], (err, product) => {
       if (err) {
         console.error('Database error getting product stock:', err);
         return res.status(500).json({ error: 'Database error' });
@@ -294,17 +285,17 @@ router.patch('/:id/stock', authenticateToken, (req, res) => {
       const newStock = Math.max(0, previousStock + quantity);
 
       // Update product stock
-      db.run(
+      executeCommand(
         'UPDATE products SET stock_quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [newStock, id],
-        function(err) {
+        (err) => {
           if (err) {
             console.error('Database error updating product stock:', err);
             return res.status(500).json({ error: 'Database error' });
           }
 
           // Record stock movement
-          db.run(
+          executeCommand(
             'INSERT INTO stock_movements (product_id, movement_type, quantity, previous_stock, new_stock, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [id, type, quantity, previousStock, newStock, req.user.id, notes],
             (err) => {
@@ -334,9 +325,8 @@ router.patch('/:id/stock', authenticateToken, (req, res) => {
 router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
     
-    db.run('DELETE FROM products WHERE id = ?', [id], function(err) {
+    executeCommand('DELETE FROM products WHERE id = ?', [id], (err) => {
       if (err) {
         console.error('Database error deleting product:', err);
         return res.status(500).json({ error: 'Database error' });
@@ -359,9 +349,7 @@ router.get('/:id/stock-movements', authenticateToken, (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
     
-    const db = getDatabase();
-    
-    db.all(
+    executeQuery(
       `SELECT sm.*, u.full_name as user_name 
        FROM stock_movements sm 
        LEFT JOIN users u ON sm.user_id = u.id 
@@ -386,7 +374,6 @@ router.get('/:id/stock-movements', authenticateToken, (req, res) => {
 // Get product statistics
 router.get('/stats/summary', authenticateToken, (req, res) => {
   try {
-    const db = getDatabase();
     
     // Get total products and low stock count
     const summaryQuery = `
@@ -410,13 +397,13 @@ router.get('/stats/summary', authenticateToken, (req, res) => {
       ORDER BY product_count DESC
     `;
 
-    db.get(summaryQuery, (err, summary) => {
+    executeQuery(summaryQuery, (err, summary) => {
       if (err) {
         console.error('Database error getting product summary:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
-      db.all(categoryQuery, (err, categories) => {
+      executeQuery(categoryQuery, (err, categories) => {
         if (err) {
           console.error('Database error getting category stats:', err);
           return res.status(500).json({ error: 'Database error' });

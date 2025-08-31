@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getDatabase } = require('../database/init');
+const { executeQuerySingle, executeCommand } = require('../database/db-adapter');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -33,50 +33,42 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const db = getDatabase();
-    
-    db.get(
+    const user = await executeQuerySingle(
       'SELECT * FROM users WHERE username = ? OR email = ?',
-      [username, username],
-      async (err, user) => {
-        if (err) {
-          console.error('Database error in login:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        if (!user) {
-          return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        
-        if (!isValidPassword) {
-          return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const token = jwt.sign(
-          { 
-            id: user.id, 
-            username: user.username, 
-            role: user.role,
-            fullName: user.full_name 
-          },
-          JWT_SECRET,
-          { expiresIn: '24h' }
-        );
-        
-        res.json({
-          token,
-          user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-            fullName: user.full_name
-          }
-        });
-      }
+      [username, username]
     );
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username, 
+        role: user.role,
+        fullName: user.full_name 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        fullName: user.full_name
+      }
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -101,36 +93,21 @@ router.post('/register', authenticateToken, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const db = getDatabase();
 
-    db.run(
+    await executeCommand(
       'INSERT INTO users (username, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)',
-      [username, email, hashedPassword, fullName, role],
-      function(err) {
-        if (err) {
-          console.error('Database error in register:', err);
-          if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({ error: 'Username or email already exists' });
-          }
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        db.get(
-          'SELECT id, username, email, role, full_name FROM users WHERE id = ?',
-          [this.lastID],
-          (err, newUser) => {
-            if (err) {
-              console.error('Database error getting new user:', err);
-              return res.status(500).json({ error: 'Database error' });
-            }
-            res.status(201).json({ 
-              message: 'User created successfully',
-              user: newUser 
-            });
-          }
-        );
-      }
+      [username, email, hashedPassword, fullName, role]
     );
+
+    const newUser = await executeQuerySingle(
+      'SELECT id, username, email, role, full_name FROM users WHERE username = ?',
+      [username]
+    );
+
+    res.status(201).json({ 
+      message: 'User created successfully',
+      user: newUser 
+    });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -140,24 +117,16 @@ router.post('/register', authenticateToken, async (req, res) => {
 // Get user profile
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
-    const db = getDatabase();
-    
-    db.get(
+    const user = await executeQuerySingle(
       'SELECT id, username, email, role, full_name FROM users WHERE id = ?',
-      [req.user.id],
-      (err, user) => {
-        if (err) {
-          console.error('Database error in profile:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        if (!user) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json({ user });
-      }
+      [req.user.id]
     );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
   } catch (error) {
     console.error('Profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -173,43 +142,29 @@ router.put('/change-password', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Current password and new password are required' });
     }
 
-    const db = getDatabase();
-    
-    db.get(
+    const user = await executeQuerySingle(
       'SELECT password FROM users WHERE id = ?',
-      [req.user.id],
-      async (err, user) => {
-        if (err) {
-          console.error('Database error in change password:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        if (!user) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-
-        const isValidPassword = await bcrypt.compare(currentPassword, user.password);
-        
-        if (!isValidPassword) {
-          return res.status(400).json({ error: 'Current password is incorrect' });
-        }
-
-        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-        db.run(
-          'UPDATE users SET password = ? WHERE id = ?',
-          [hashedNewPassword, req.user.id],
-          (err) => {
-            if (err) {
-              console.error('Database error updating password:', err);
-              return res.status(500).json({ error: 'Database error' });
-            }
-
-            res.json({ message: 'Password updated successfully' });
-          }
-        );
-      }
+      [req.user.id]
     );
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    await executeCommand(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [hashedNewPassword, req.user.id]
+    );
+
+    res.json({ message: 'Password updated successfully' });
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -223,19 +178,11 @@ router.get('/users', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can view all users' });
     }
 
-    const db = getDatabase();
-    
-    db.all(
-      'SELECT id, username, email, role, full_name, created_at FROM users ORDER BY created_at DESC',
-      (err, users) => {
-        if (err) {
-          console.error('Database error getting users:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        res.json({ users });
-      }
+    const users = await executeQuerySingle(
+      'SELECT id, username, email, role, full_name, created_at FROM users ORDER BY created_at DESC'
     );
+
+    res.json({ users });
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -255,24 +202,16 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    const db = getDatabase();
-    
-    db.run(
+    const result = await executeCommand(
       'DELETE FROM users WHERE id = ?',
-      [userId],
-      function(err) {
-        if (err) {
-          console.error('Database error deleting user:', err);
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json({ message: 'User deleted successfully' });
-      }
+      [userId]
     );
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'Internal server error' });
