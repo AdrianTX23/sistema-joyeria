@@ -175,6 +175,13 @@ async function insertDefaultData(client) {
         full_name: 'Administrador del Sistema'
       },
       {
+        username: 'genesis0311',
+        email: 'genesisbarcelo15@gmail.com',
+        password: bcrypt.hashSync('Genesis0311', 10),
+        role: 'administrador',
+        full_name: 'Genesis Barceló - Administradora'
+      },
+      {
         username: 'vendedor1',
         email: 'vendedor1@joyeria.com',
         password: bcrypt.hashSync('vendedor123', 10),
