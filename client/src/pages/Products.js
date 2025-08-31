@@ -16,56 +16,56 @@ import BackendTest from '../components/BackendTest';
 const Products = () => {
   console.log('🚀 Products component - START OF COMPONENT');
   
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [categories, setCategories] = useState([]);
+
+  console.log('🚀 Products component mounted');
+
+  useEffect(() => {
+    console.log('📋 Products useEffect triggered');
+    fetchProducts();
+    fetchCategories();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      console.log('📦 Starting products fetch...');
+      setLoading(true);
+      setError(null);
+
+      const response = await axios.get('/api/products');
+      console.log('✅ Products response:', response.data);
+      
+      setProducts(response.data.products || []);
+    } catch (error) {
+      console.error('❌ Products fetch error:', error);
+      setError(error.response?.data?.error || 'Error loading products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      console.log('📂 Starting categories fetch...');
+      const response = await axios.get('/api/categories');
+      console.log('✅ Categories response:', response.data);
+      setCategories(response.data.categories || []);
+    } catch (error) {
+      console.error('❌ Categories fetch error:', error);
+    }
+  };
+
+  console.log('🔄 Products render state:', {
+    loading,
+    productsCount: products.length,
+    categoriesCount: categories.length,
+    error
+  });
+
   try {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [categories, setCategories] = useState([]);
-
-    console.log('🚀 Products component mounted');
-
-    useEffect(() => {
-      console.log('📋 Products useEffect triggered');
-      fetchProducts();
-      fetchCategories();
-    }, []);
-
-    const fetchProducts = async () => {
-      try {
-        console.log('📦 Starting products fetch...');
-        setLoading(true);
-        setError(null);
-
-        const response = await axios.get('/api/products');
-        console.log('✅ Products response:', response.data);
-        
-        setProducts(response.data.products || []);
-      } catch (error) {
-        console.error('❌ Products fetch error:', error);
-        setError(error.response?.data?.error || 'Error loading products');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const fetchCategories = async () => {
-      try {
-        console.log('📂 Starting categories fetch...');
-        const response = await axios.get('/api/categories');
-        console.log('✅ Categories response:', response.data);
-        setCategories(response.data.categories || []);
-      } catch (error) {
-        console.error('❌ Categories fetch error:', error);
-      }
-    };
-
-    console.log('🔄 Products render state:', {
-      loading,
-      productsCount: products.length,
-      categoriesCount: categories.length,
-      error
-    });
-
     if (loading) {
       console.log('🔄 Rendering loading state');
       return (
