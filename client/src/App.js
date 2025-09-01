@@ -10,7 +10,6 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Backup from './pages/Backup';
 import LoadingSpinner from './components/LoadingSpinner';
-import SimpleApp from './components/SimpleApp';
 
 function App() {
   const { user, loading, checkAuth } = useAuth();
@@ -19,15 +18,6 @@ function App() {
     checkAuth();
   }, [checkAuth]);
 
-  // Temporalmente usar SimpleApp para diagnóstico
-  return (
-    <Router>
-      <SimpleApp />
-    </Router>
-  );
-
-  // Código original comentado temporalmente
-  /*
   return (
     <Router>
       {loading ? (
@@ -51,7 +41,6 @@ function App() {
       )}
     </Router>
   );
-  */
 }
 
 export default App;

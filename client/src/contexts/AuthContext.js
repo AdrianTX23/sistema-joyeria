@@ -95,61 +95,44 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     console.log('🔍 Checking authentication on app load...');
     
-    // Intentar obtener token de sessionStorage primero (sesión temporal)
+    // Intentar obtener token y usuario de sessionStorage primero
     let token = sessionStorage.getItem('token');
     let user = sessionStorage.getItem('user');
-    let isSessionToken = true;
     
-    // Si no hay token en sessionStorage, intentar localStorage (sesión persistente)
+    // Si no hay en sessionStorage, intentar localStorage
     if (!token) {
       token = localStorage.getItem('token');
       user = localStorage.getItem('user');
-      isSessionToken = false;
     }
     
-    console.log('🎫 Token found:', token ? 'Yes' : 'No', 'Type:', isSessionToken ? 'session' : 'local');
+    console.log('🎫 Token found:', token ? 'Yes' : 'No');
     console.log('👤 User found:', user ? 'Yes' : 'No');
     
     if (token && user) {
       try {
-        console.log('🔍 Validating token with server...');
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
-        // Intentar validar el token con el servidor
-        const response = await axios.get('/api/auth/profile');
-        console.log('✅ Token validation successful:', response.data);
+        // Intentar usar datos locales primero
+        const userData = JSON.parse(user);
+        console.log('🔄 Using local user data:', userData);
         
         dispatch({
           type: 'LOGIN_SUCCESS',
           payload: {
-            user: response.data.user,
+            user: userData,
             token: token,
           },
         });
-      } catch (error) {
-        console.error('❌ Token validation failed:', error.response?.data || error.message);
         
-        // Si la validación falla, intentar usar los datos locales
-        try {
-          const userData = JSON.parse(user);
-          console.log('🔄 Using local user data:', userData);
-          
-          dispatch({
-            type: 'LOGIN_SUCCESS',
-            payload: {
-              user: userData,
-              token: token,
-            },
-          });
-        } catch (parseError) {
-          console.error('❌ Error parsing local user data:', parseError);
-          // Limpiar tokens inválidos
-          sessionStorage.removeItem('token');
-          localStorage.removeItem('token');
-          sessionStorage.removeItem('user');
-          localStorage.removeItem('user');
-          dispatch({ type: 'LOGIN_FAILURE' });
-        }
+        // Configurar axios para futuras peticiones
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+      } catch (parseError) {
+        console.error('❌ Error parsing user data:', parseError);
+        // Limpiar datos inválidos
+        sessionStorage.removeItem('token');
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+        localStorage.removeItem('user');
+        dispatch({ type: 'LOGIN_FAILURE' });
       }
     } else {
       console.log('🚫 No token or user found, user not authenticated');
