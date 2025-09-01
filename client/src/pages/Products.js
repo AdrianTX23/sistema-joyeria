@@ -19,7 +19,6 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner';
 import ProductModal from '../components/ProductModal';
 import StockModal from '../components/StockModal';
-import BackendTest from '../components/BackendTest';
 
 const Products = () => {
   console.log('🚀 Products component - START OF COMPONENT');
@@ -32,6 +31,8 @@ const Products = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [sortBy, setSortBy] = useState('name'); // 'name', 'price', 'stock', 'date'
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
 
   console.log('🚀 Products component mounted');
 
@@ -116,6 +117,21 @@ const Products = () => {
     return { status: 'ok', text: 'En Stock', color: 'bg-green-100 text-green-800' };
   };
 
+  const handleAddProduct = () => {
+    setEditingProduct(null);
+    setShowProductModal(true);
+  };
+
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setShowProductModal(true);
+  };
+
+  const handleProductSaved = () => {
+    setShowProductModal(false);
+    fetchProducts(); // Recargar productos
+  };
+
   console.log('🔄 Products render state:', {
     loading,
     productsCount: products.length,
@@ -191,14 +207,14 @@ const Products = () => {
             Gestiona tu inventario de joyería
           </p>
         </div>
-        <button className="btn btn-primary mt-4 sm:mt-0">
+        <button 
+          onClick={handleAddProduct}
+          className="btn btn-primary mt-4 sm:mt-0"
+        >
           <Plus className="w-4 h-4 mr-2" />
           Agregar Producto
         </button>
       </div>
-
-      {/* Backend Test */}
-      <BackendTest />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -350,7 +366,7 @@ const Products = () => {
                 }
               </p>
               {!searchTerm && !selectedCategory && (
-                <button className="btn btn-primary">
+                <button onClick={handleAddProduct} className="btn btn-primary">
                   <Plus className="w-4 h-4 mr-2" />
                   Agregar Producto
                 </button>
@@ -401,13 +417,16 @@ const Products = () => {
                         
                         {/* Actions */}
                         <div className="flex items-center space-x-2 pt-2">
-                          <button className="btn btn-sm btn-outline flex-1">
-                            <Eye className="w-3 h-3 mr-1" />
-                            Ver
-                          </button>
-                          <button className="btn btn-sm btn-outline flex-1">
+                          <button 
+                            onClick={() => handleEditProduct(product)}
+                            className="btn btn-sm btn-outline flex-1"
+                          >
                             <Edit className="w-3 h-3 mr-1" />
                             Editar
+                          </button>
+                          <button className="btn btn-sm btn-outline btn-danger flex-1">
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Eliminar
                           </button>
                         </div>
                       </div>
@@ -486,10 +505,10 @@ const Products = () => {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center space-x-2">
-                                <button className="btn btn-sm btn-outline">
-                                  <Eye className="w-3 h-3" />
-                                </button>
-                                <button className="btn btn-sm btn-outline">
+                                <button 
+                                  onClick={() => handleEditProduct(product)}
+                                  className="btn btn-sm btn-outline"
+                                >
                                   <Edit className="w-3 h-3" />
                                 </button>
                                 <button className="btn btn-sm btn-outline btn-danger">
@@ -509,26 +528,16 @@ const Products = () => {
         </div>
       )}
 
-      {/* Debug Info */}
-      <div className="card">
-        <div className="card-body">
-          <h3 className="text-lg font-semibold mb-4">Debug Info</h3>
-          <pre className="text-xs bg-gray-100 p-4 rounded">
-            {JSON.stringify({
-              productsCount: products.length,
-              categoriesCount: categories.length,
-              loading,
-              error,
-              searchTerm,
-              selectedCategory,
-              sortBy,
-              viewMode,
-              filteredCount: filteredAndSortedProducts.length,
-              products: products.slice(0, 2) // Show first 2 products
-            }, null, 2)}
-          </pre>
-        </div>
-      </div>
+      {/* Product Modal */}
+      {showProductModal && (
+        <ProductModal
+          isOpen={showProductModal}
+          onClose={() => setShowProductModal(false)}
+          product={editingProduct}
+          onSave={handleProductSaved}
+          categories={categories}
+        />
+      )}
     </div>
   );
 };
