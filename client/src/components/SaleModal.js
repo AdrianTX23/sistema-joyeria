@@ -83,7 +83,8 @@ const SaleModal = ({ isOpen, onClose, onSuccess }) => {
         items: selectedProducts.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
-          unit_price: item.price
+          unit_price: item.price,
+          current_stock: item.stock_quantity
         }))
       };
 

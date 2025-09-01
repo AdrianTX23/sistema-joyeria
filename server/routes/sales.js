@@ -160,7 +160,7 @@ router.post('/', authenticateToken, (req, res) => {
         sale_number, customer_name, customer_email, customer_phone, 
         total_amount, payment_method, user_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [sale_number, customer_name, customer_email, customer_phone, total_amount, payment_method, req.user.id],
+      [sale_number, customer_name, customer_email, customer_phone, total_amount, payment_method, req.user.userId],
       function(err) {
         if (err) {
           console.error('Database error creating sale:', err);
@@ -198,7 +198,7 @@ router.post('/', authenticateToken, (req, res) => {
                   // Record stock movement
                   db.run(
                     'INSERT INTO stock_movements (product_id, movement_type, quantity, previous_stock, new_stock, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    [item.product_id, 'sale', -item.quantity, item.current_stock, item.current_stock - item.quantity, req.user.id, `Sale ${sale_number}`],
+                    [item.product_id, 'sale', -item.quantity, item.quantity, 0, req.user.userId, `Sale ${sale_number}`],
                     (err) => {
                       if (err) {
                         console.error('Database error recording stock movement:', err);
