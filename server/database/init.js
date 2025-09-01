@@ -108,9 +108,13 @@ async function initDatabase() {
           weight DECIMAL(8,3),
           dimensions TEXT,
           material TEXT,
+          is_deleted INTEGER DEFAULT 0,
+          deleted_at DATETIME,
+          deleted_by INTEGER,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (category_id) REFERENCES categories (id)
+          FOREIGN KEY (category_id) REFERENCES categories (id),
+          FOREIGN KEY (deleted_by) REFERENCES users (id)
         )
       `, (err) => {
         if (err) {
@@ -131,8 +135,12 @@ async function initDatabase() {
           total_amount DECIMAL(10,2) NOT NULL,
           payment_method TEXT NOT NULL,
           user_id INTEGER NOT NULL,
+          is_deleted INTEGER DEFAULT 0,
+          deleted_at DATETIME,
+          deleted_by INTEGER,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_id) REFERENCES users (id)
+          FOREIGN KEY (user_id) REFERENCES users (id),
+          FOREIGN KEY (deleted_by) REFERENCES users (id)
         )
       `, (err) => {
         if (err) {
@@ -182,6 +190,29 @@ async function initDatabase() {
           console.error('❌ Error creating stock_movements table:', err);
         } else {
           console.log('✅ Stock_movements table created/verified successfully');
+        }
+      });
+
+      // Create audit_log table for tracking all changes
+      db.run(`
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_name TEXT NOT NULL,
+          record_id INTEGER NOT NULL,
+          action TEXT NOT NULL,
+          old_values TEXT,
+          new_values TEXT,
+          user_id INTEGER NOT NULL,
+          ip_address TEXT,
+          user_agent TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+      `, (err) => {
+        if (err) {
+          console.error('❌ Error creating audit_log table:', err);
+        } else {
+          console.log('✅ Audit_log table created/verified successfully');
         }
       });
 
@@ -272,11 +303,16 @@ async function initDatabase() {
       console.log('📈 Creating database indexes...');
       db.run('CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)');
       db.run('CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_products_deleted ON products(is_deleted)');
       db.run('CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(created_at)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_sales_deleted ON sales(is_deleted)');
       db.run('CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id)');
       db.run('CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id)');
       db.run('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
       db.run('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_audit_log_table ON audit_log(table_name)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_audit_log_record ON audit_log(record_id)');
+      db.run('CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id)');
       console.log('✅ Database indexes created');
 
       // Verificar el tamaño de la base de datos

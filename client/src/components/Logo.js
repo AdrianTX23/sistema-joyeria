@@ -11,16 +11,22 @@ const Logo = ({ className = "w-8 h-8", showText = true }) => {
           viewBox="0 0 40 40"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="drop-shadow-sm"
+          className="drop-shadow-lg"
         >
           {/* Fondo circular dorado con gradiente */}
           <defs>
             <radialGradient id="goldGradient" cx="0.5" cy="0.5" r="0.5">
               <stop offset="0%" stopColor="#F9D664" />
-              <stop offset="100%" stopColor="#F4CC5A" />
+              <stop offset="70%" stopColor="#F4CC5A" />
+              <stop offset="100%" stopColor="#D97706" />
             </radialGradient>
+            <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FFFFFF" />
+              <stop offset="100%" stopColor="#FEF3C7" />
+            </linearGradient>
           </defs>
           
+          {/* Fondo circular dorado */}
           <circle
             cx="20"
             cy="20"
@@ -37,7 +43,7 @@ const Logo = ({ className = "w-8 h-8", showText = true }) => {
             rx="12"
             ry="8"
             fill="none"
-            stroke="white"
+            stroke="url(#ringGradient)"
             strokeWidth="2.5"
             strokeLinecap="round"
           />
@@ -81,6 +87,15 @@ const Logo = ({ className = "w-8 h-8", showText = true }) => {
             r="0.8"
             fill="white"
             opacity="0.7"
+          />
+          
+          {/* Efecto de brillo adicional */}
+          <circle
+            cx="21"
+            cy="15"
+            r="0.5"
+            fill="white"
+            opacity="0.6"
           />
         </svg>
       </div>
