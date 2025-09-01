@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { executeQuerySingle, executeCommand } = require('../database/db-adapter');
+const { getDatabase } = require('../database/init');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -51,10 +51,17 @@ router.post('/login', async (req, res) => {
     
     console.log(`🔍 Buscando usuario por ${searchField}: ${searchValue}`);
     
-    const user = await executeQuerySingle(
-      `SELECT * FROM users WHERE ${searchField} = ?`,
-      [searchValue]
-    );
+    const db = getDatabase();
+    const user = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM users WHERE ${searchField} = ?`,
+        [searchValue],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
 
     if (!user) {
       console.log(`❌ Usuario no encontrado: ${searchValue}`);
@@ -127,15 +134,28 @@ router.post('/register', authenticateToken, async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await executeCommand(
-      'INSERT INTO users (username, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)',
-      [username, email, hashedPassword, fullName, role]
-    );
+    const db = getDatabase();
+    await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO users (username, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)',
+        [username, email, hashedPassword, fullName, role],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
 
-    const newUser = await executeQuerySingle(
-      'SELECT id, username, email, role, full_name FROM users WHERE username = ?',
-      [username]
-    );
+    const newUser = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT id, username, email, role, full_name FROM users WHERE username = ?',
+        [username],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
 
     res.status(201).json({ 
       message: 'User created successfully',
@@ -152,10 +172,17 @@ router.get('/profile', authenticateToken, async (req, res) => {
   try {
     console.log('👤 Obteniendo perfil de usuario:', req.user);
     
-    const user = await executeQuerySingle(
-      'SELECT id, username, email, role, full_name FROM users WHERE id = ?',
-      [req.user.userId]
-    );
+    const db = getDatabase();
+    const user = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT id, username, email, role, full_name FROM users WHERE id = ?',
+        [req.user.userId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
 
     if (!user) {
       console.log('❌ Usuario no encontrado en BD');
@@ -188,10 +215,17 @@ router.put('/change-password', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Current password and new password are required' });
     }
 
-    const user = await executeQuerySingle(
-      'SELECT password FROM users WHERE id = ?',
-      [req.user.id]
-    );
+    const db = getDatabase();
+    const user = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT password FROM users WHERE id = ?',
+        [req.user.id],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -205,10 +239,16 @@ router.put('/change-password', authenticateToken, async (req, res) => {
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
-    await executeCommand(
-      'UPDATE users SET password = ? WHERE id = ?',
-      [hashedNewPassword, req.user.id]
-    );
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE users SET password = ? WHERE id = ?',
+        [hashedNewPassword, req.user.id],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
@@ -224,9 +264,16 @@ router.get('/users', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can view all users' });
     }
 
-    const users = await executeQuerySingle(
-      'SELECT id, username, email, role, full_name, created_at FROM users ORDER BY created_at DESC'
-    );
+    const db = getDatabase();
+    const users = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT id, username, email, role, full_name, created_at FROM users ORDER BY created_at DESC',
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
 
     res.json({ users });
   } catch (error) {
@@ -248,10 +295,17 @@ router.delete('/users/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    const result = await executeCommand(
-      'DELETE FROM users WHERE id = ?',
-      [userId]
-    );
+    const db = getDatabase();
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM users WHERE id = ?',
+        [userId],
+        function(err) {
+          if (err) reject(err);
+          else resolve({ changes: this.changes });
+        }
+      );
+    });
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'User not found' });
