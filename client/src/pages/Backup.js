@@ -162,8 +162,8 @@ const Backup = () => {
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Clock className="w-6 h-6 text-purple-600" />
+              <div className="p-2 bg-[#F9D664]/20 rounded-lg">
+                <Clock className="w-6 h-6 text-[#F9D664]" />
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Último Backup</p>

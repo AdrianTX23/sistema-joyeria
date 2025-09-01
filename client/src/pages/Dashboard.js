@@ -205,7 +205,7 @@ const Dashboard = () => {
                     <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip />
-                    <Bar dataKey="total_sold" fill="#8B5CF6" />
+                    <Bar dataKey="total_sold" fill="#F9D664" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
