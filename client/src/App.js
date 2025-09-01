@@ -10,6 +10,7 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Backup from './pages/Backup';
 import LoadingSpinner from './components/LoadingSpinner';
+import SimpleApp from './components/SimpleApp';
 
 function App() {
   const { user, loading, checkAuth } = useAuth();
@@ -18,33 +19,39 @@ function App() {
     checkAuth();
   }, [checkAuth]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Login />;
-  }
-
+  // Temporalmente usar SimpleApp para diagnóstico
   return (
     <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/sales" element={<Sales />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/backup" element={<Backup />} />
-        </Routes>
-      </Layout>
+      <SimpleApp />
     </Router>
   );
+
+  // Código original comentado temporalmente
+  /*
+  return (
+    <Router>
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <LoadingSpinner size="lg" />
+        </div>
+      ) : !user ? (
+        <Login />
+      ) : (
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/backup" element={<Backup />} />
+          </Routes>
+        </Layout>
+      )}
+    </Router>
+  );
+  */
 }
 
 export default App;
