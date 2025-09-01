@@ -150,19 +150,32 @@ router.post('/register', authenticateToken, async (req, res) => {
 // Get user profile
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
+    console.log('👤 Obteniendo perfil de usuario:', req.user);
+    
     const user = await executeQuerySingle(
       'SELECT id, username, email, role, full_name FROM users WHERE id = ?',
-      [req.user.id]
+      [req.user.userId]
     );
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      console.log('❌ Usuario no encontrado en BD');
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    res.json({ user });
+    console.log('✅ Perfil de usuario obtenido:', user);
+    
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        fullName: user.full_name
+      }
+    });
   } catch (error) {
-    console.error('Profile error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error obteniendo perfil:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 

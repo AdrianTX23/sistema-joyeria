@@ -97,27 +97,27 @@ export const AuthProvider = ({ children }) => {
     
     // Intentar obtener token de sessionStorage primero (sesión temporal)
     let token = sessionStorage.getItem('token');
+    let user = sessionStorage.getItem('user');
     let isSessionToken = true;
     
     // Si no hay token en sessionStorage, intentar localStorage (sesión persistente)
     if (!token) {
       token = localStorage.getItem('token');
+      user = localStorage.getItem('user');
       isSessionToken = false;
     }
     
     console.log('🎫 Token found:', token ? 'Yes' : 'No', 'Type:', isSessionToken ? 'session' : 'local');
+    console.log('👤 User found:', user ? 'Yes' : 'No');
     
-    if (token) {
+    if (token && user) {
       try {
         console.log('🔍 Validating token with server...');
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        // Intentar validar el token con el servidor
         const response = await axios.get('/api/auth/profile');
         console.log('✅ Token validation successful:', response.data);
-        
-        // Si el token es de sessionStorage, moverlo a sessionStorage para mantener la sesión temporal
-        if (isSessionToken) {
-          sessionStorage.setItem('token', token);
-        }
         
         dispatch({
           type: 'LOGIN_SUCCESS',
@@ -128,13 +128,31 @@ export const AuthProvider = ({ children }) => {
         });
       } catch (error) {
         console.error('❌ Token validation failed:', error.response?.data || error.message);
-        // Limpiar tokens inválidos
-        sessionStorage.removeItem('token');
-        localStorage.removeItem('token');
-        dispatch({ type: 'LOGIN_FAILURE' });
+        
+        // Si la validación falla, intentar usar los datos locales
+        try {
+          const userData = JSON.parse(user);
+          console.log('🔄 Using local user data:', userData);
+          
+          dispatch({
+            type: 'LOGIN_SUCCESS',
+            payload: {
+              user: userData,
+              token: token,
+            },
+          });
+        } catch (parseError) {
+          console.error('❌ Error parsing local user data:', parseError);
+          // Limpiar tokens inválidos
+          sessionStorage.removeItem('token');
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('user');
+          localStorage.removeItem('user');
+          dispatch({ type: 'LOGIN_FAILURE' });
+        }
       }
     } else {
-      console.log('🚫 No token found, user not authenticated');
+      console.log('🚫 No token or user found, user not authenticated');
       dispatch({ type: 'LOGIN_FAILURE' });
     }
   };
