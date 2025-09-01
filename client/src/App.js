@@ -1,6 +1,6 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthContext } from './contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -12,7 +12,7 @@ import Backup from './pages/Backup';
 import LoadingSpinner from './components/LoadingSpinner';
 
 function App() {
-  const { user, loading, checkAuth } = useContext(AuthContext);
+  const { user, loading, checkAuth } = useAuth();
 
   useEffect(() => {
     checkAuth();

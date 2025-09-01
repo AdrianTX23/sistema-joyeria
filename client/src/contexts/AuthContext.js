@@ -293,6 +293,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateUser,
     changePassword,
+    checkAuth,
   };
 
   console.log('🎯 AuthProvider - Final state:', state);
@@ -311,3 +312,6 @@ export const useAuth = () => {
   }
   return context;
 };
+
+// Exportar AuthContext para uso directo
+export { AuthContext };
