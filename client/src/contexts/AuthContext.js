@@ -91,55 +91,56 @@ export const AuthProvider = ({ children }) => {
     }
   }, [state.token]);
 
-  // Check if user is authenticated on app load
-  useEffect(() => {
-    const checkAuth = async () => {
-      console.log('🔍 Checking authentication on app load...');
-      
-      // Intentar obtener token de sessionStorage primero (sesión temporal)
-      let token = sessionStorage.getItem('token');
-      let isSessionToken = true;
-      
-      // Si no hay token en sessionStorage, intentar localStorage (sesión persistente)
-      if (!token) {
-        token = localStorage.getItem('token');
-        isSessionToken = false;
-      }
-      
-      console.log('🎫 Token found:', token ? 'Yes' : 'No', 'Type:', isSessionToken ? 'session' : 'local');
-      
-      if (token) {
-        try {
-          console.log('🔍 Validating token with server...');
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          const response = await axios.get('/api/auth/profile');
-          console.log('✅ Token validation successful:', response.data);
-          
-          // Si el token es de sessionStorage, moverlo a sessionStorage para mantener la sesión temporal
-          if (isSessionToken) {
-            sessionStorage.setItem('token', token);
-          }
-          
-          dispatch({
-            type: 'LOGIN_SUCCESS',
-            payload: {
-              user: response.data.user,
-              token: token,
-            },
-          });
-        } catch (error) {
-          console.error('❌ Token validation failed:', error.response?.data || error.message);
-          // Limpiar tokens inválidos
-          sessionStorage.removeItem('token');
-          localStorage.removeItem('token');
-          dispatch({ type: 'LOGIN_FAILURE' });
+  // Función para verificar autenticación
+  const checkAuth = async () => {
+    console.log('🔍 Checking authentication on app load...');
+    
+    // Intentar obtener token de sessionStorage primero (sesión temporal)
+    let token = sessionStorage.getItem('token');
+    let isSessionToken = true;
+    
+    // Si no hay token en sessionStorage, intentar localStorage (sesión persistente)
+    if (!token) {
+      token = localStorage.getItem('token');
+      isSessionToken = false;
+    }
+    
+    console.log('🎫 Token found:', token ? 'Yes' : 'No', 'Type:', isSessionToken ? 'session' : 'local');
+    
+    if (token) {
+      try {
+        console.log('🔍 Validating token with server...');
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        const response = await axios.get('/api/auth/profile');
+        console.log('✅ Token validation successful:', response.data);
+        
+        // Si el token es de sessionStorage, moverlo a sessionStorage para mantener la sesión temporal
+        if (isSessionToken) {
+          sessionStorage.setItem('token', token);
         }
-      } else {
-        console.log('🚫 No token found, user not authenticated');
+        
+        dispatch({
+          type: 'LOGIN_SUCCESS',
+          payload: {
+            user: response.data.user,
+            token: token,
+          },
+        });
+      } catch (error) {
+        console.error('❌ Token validation failed:', error.response?.data || error.message);
+        // Limpiar tokens inválidos
+        sessionStorage.removeItem('token');
+        localStorage.removeItem('token');
         dispatch({ type: 'LOGIN_FAILURE' });
       }
-    };
+    } else {
+      console.log('🚫 No token found, user not authenticated');
+      dispatch({ type: 'LOGIN_FAILURE' });
+    }
+  };
 
+  // Check if user is authenticated on app load
+  useEffect(() => {
     checkAuth();
   }, []);
 
