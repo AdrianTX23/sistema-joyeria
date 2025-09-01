@@ -1,180 +1,218 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import { X, Package, TrendingUp, TrendingDown } from 'lucide-react';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Minus, Package, TrendingUp, TrendingDown } from 'lucide-react';
 
-const StockModal = ({ product, onClose }) => {
-  const [formData, setFormData] = useState({
-    quantity: '',
-    movementType: 'adjustment',
-    notes: '',
-  });
+const StockModal = ({ isOpen, onClose, product, onStockUpdate }) => {
+  const [quantity, setQuantity] = useState(0);
+  const [movementType, setMovementType] = useState('add'); // 'add' or 'subtract'
+  const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  useEffect(() => {
+    if (product) {
+      setQuantity(0);
+      setMovementType('add');
+      setReason('');
+    }
+  }, [product]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    if (!quantity || quantity <= 0) return;
 
+    setLoading(true);
     try {
-      await axios.patch(`/api/products/${product.id}/stock`, formData);
-      toast.success('Stock actualizado exitosamente');
+      // Aquí iría la lógica para actualizar el stock
+      // Por ahora solo simulamos
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (onStockUpdate) {
+        onStockUpdate({
+          productId: product.id,
+          quantity: movementType === 'add' ? quantity : -quantity,
+          reason,
+          type: movementType
+        });
+      }
+      
       onClose();
     } catch (error) {
-      const message = error.response?.data?.error || 'Error al actualizar el stock';
-      toast.error(message);
+      console.error('Error updating stock:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const getNewStock = () => {
-    const currentStock = product.stock_quantity;
-    const change = parseInt(formData.quantity) || 0;
-    return Math.max(0, currentStock + change);
-  };
+  if (!isOpen || !product) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-large max-w-md w-full">
-        <div className="card-header flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Actualizar Stock
-          </h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-[#F9D664]/20 rounded-lg">
+              <Package className="w-6 h-6 text-[#F9D664]" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Gestionar Stock</h3>
+              <p className="text-sm text-gray-600">{product.name}</p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="text-gray-400 hover:text-gray-600 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="card-body space-y-6">
-          {/* Product Info */}
+        {/* Content */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Current Stock Info */}
           <div className="bg-gray-50 rounded-lg p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
-                <Package className="w-6 h-6 text-primary-600" />
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div>
+                <p className="text-sm text-gray-600">Stock Actual</p>
+                <p className="text-2xl font-bold text-gray-900">{product.stock_quantity || 0}</p>
               </div>
               <div>
-                <h3 className="font-medium text-gray-900">{product.name}</h3>
-                <p className="text-sm text-gray-500">SKU: {product.sku}</p>
-                <p className="text-sm text-gray-500">
-                  Stock actual: <span className="font-medium">{product.stock_quantity}</span>
-                </p>
+                <p className="text-sm text-gray-600">Stock Mínimo</p>
+                <p className="text-lg font-semibold text-yellow-600">{product.min_stock_level || 5}</p>
               </div>
             </div>
-          </div>
-
-          {/* Stock Change */}
-          <div>
-            <label htmlFor="quantity" className="label">Cantidad a Ajustar *</label>
-            <div className="relative">
-              <input
-                type="number"
-                id="quantity"
-                name="quantity"
-                value={formData.quantity}
-                onChange={handleChange}
-                className="input"
-                placeholder="0"
-                required
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                {parseInt(formData.quantity) > 0 ? (
-                  <TrendingUp className="w-5 h-5 text-success-600" />
-                ) : parseInt(formData.quantity) < 0 ? (
-                  <TrendingDown className="w-5 h-5 text-danger-600" />
-                ) : null}
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Use números positivos para agregar, negativos para restar
-            </p>
           </div>
 
           {/* Movement Type */}
           <div>
-            <label htmlFor="movementType" className="label">Tipo de Movimiento</label>
-            <select
-              id="movementType"
-              name="movementType"
-              value={formData.movementType}
-              onChange={handleChange}
-              className="input"
-            >
-              <option value="adjustment">Ajuste de Stock</option>
-              <option value="restock">Reabastecimiento</option>
-              <option value="damage">Daño/Pérdida</option>
-              <option value="return">Devolución</option>
-            </select>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label htmlFor="notes" className="label">Notas</label>
-            <textarea
-              id="notes"
-              name="notes"
-              value={formData.notes}
-              onChange={handleChange}
-              className="input"
-              rows="3"
-              placeholder="Motivo del ajuste de stock..."
-            />
-          </div>
-
-          {/* Preview */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2">Resumen del Cambio</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-blue-700">Stock Actual:</span>
-                <span className="font-medium">{product.stock_quantity}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-blue-700">Cambio:</span>
-                <span className={`font-medium ${
-                  parseInt(formData.quantity) > 0 ? 'text-success-600' : 'text-danger-600'
-                }`}>
-                  {parseInt(formData.quantity) > 0 ? '+' : ''}{formData.quantity || 0}
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-blue-200 pt-2">
-                <span className="text-blue-900 font-medium">Nuevo Stock:</span>
-                <span className="font-bold text-blue-900">{getNewStock()}</span>
-              </div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Tipo de Movimiento
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setMovementType('add')}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  movementType === 'add'
+                    ? 'border-[#F9D664] bg-[#F9D664]/10 text-[#F9D664]'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <Plus className="w-4 h-4" />
+                  <span>Agregar</span>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMovementType('subtract')}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  movementType === 'subtract'
+                    ? 'border-red-500 bg-red-50 text-red-600'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <Minus className="w-4 h-4" />
+                  <span>Restar</span>
+                </div>
+              </button>
             </div>
           </div>
 
+          {/* Quantity */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cantidad
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+              className="input w-full"
+              placeholder="Ingresa la cantidad"
+              required
+            />
+          </div>
+
+          {/* Reason */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Motivo
+            </label>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="input w-full"
+              required
+            >
+              <option value="">Selecciona un motivo</option>
+              {movementType === 'add' ? (
+                <>
+                  <option value="compra">Compra de inventario</option>
+                  <option value="devolucion">Devolución de cliente</option>
+                  <option value="ajuste">Ajuste de inventario</option>
+                  <option value="transferencia">Transferencia entre sucursales</option>
+                </>
+              ) : (
+                <>
+                  <option value="venta">Venta</option>
+                  <option value="perdida">Pérdida o daño</option>
+                  <option value="ajuste">Ajuste de inventario</option>
+                  <option value="transferencia">Transferencia entre sucursales</option>
+                </>
+              )}
+            </select>
+          </div>
+
+          {/* Preview */}
+          {quantity > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center space-x-2 text-blue-800">
+                {movementType === 'add' ? (
+                  <TrendingUp className="w-4 h-4" />
+                ) : (
+                  <TrendingDown className="w-4 h-4" />
+                )}
+                <span className="font-medium">Resumen del cambio:</span>
+              </div>
+              <p className="text-sm text-blue-700 mt-1">
+                Stock actual: <strong>{product.stock_quantity || 0}</strong>
+                {movementType === 'add' ? ' + ' : ' - '}
+                <strong>{quantity}</strong>
+                {' = '}
+                <strong>
+                  {movementType === 'add' 
+                    ? (product.stock_quantity || 0) + quantity
+                    : Math.max(0, (product.stock_quantity || 0) - quantity)
+                  }
+                </strong>
+              </p>
+            </div>
+          )}
+
           {/* Actions */}
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
+          <div className="flex space-x-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="btn btn-secondary"
+              className="btn btn-outline flex-1"
               disabled={loading}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="btn btn-primary"
-              disabled={loading}
+              className="btn btn-primary flex-1"
+              disabled={loading || !quantity || !reason}
             >
               {loading ? (
-                <div className="flex items-center">
-                  <div className="loading-spinner-sm mr-2" />
-                  Actualizando...
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Actualizando...</span>
                 </div>
               ) : (
-                'Actualizar Stock'
+                `Actualizar Stock`
               )}
             </button>
           </div>
