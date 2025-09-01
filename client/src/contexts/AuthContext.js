@@ -72,9 +72,6 @@ const authReducer = (state, action) => {
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  console.log('🔍 AuthProvider - Current state:', state);
-  console.log('🔍 AuthProvider - Initial state:', initialState);
-
   // Configurar axios con la URL del backend
   useEffect(() => {
     console.log('🔧 Setting up axios with baseURL:', API_CONFIG.baseURL);
@@ -93,7 +90,7 @@ export const AuthProvider = ({ children }) => {
   }, [state.token]);
 
   // Función para verificar autenticación
-  const checkAuth = async () => {
+  const checkAuth = () => {
     console.log('🔍 Checking authentication on app load...');
     
     // Intentar obtener token y usuario de sessionStorage primero

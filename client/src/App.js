@@ -10,25 +10,13 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Backup from './pages/Backup';
 import LoadingSpinner from './components/LoadingSpinner';
-import FallbackApp from './components/FallbackApp';
 
 function App() {
   const { user, loading, checkAuth } = useAuth();
 
-  console.log('🔍 App.js - Current state:', { user, loading });
-
   useEffect(() => {
-    console.log('🔍 App.js - useEffect triggered, calling checkAuth');
     checkAuth();
   }, [checkAuth]);
-
-  console.log('🔍 App.js - Rendering with state:', { loading, user: !!user });
-
-  // Fallback para debugging
-  if (typeof loading === 'undefined' || typeof user === 'undefined') {
-    console.log('🔍 App.js - Using fallback due to undefined state');
-    return <FallbackApp />;
-  }
 
   return (
     <Router>
