@@ -4,11 +4,11 @@ const SimpleTest = () => {
   console.log('🧪 SimpleTest component rendering');
   
   return (
-    <div className="p-8 bg-blue-100 border-2 border-blue-500 rounded-lg">
-      <h1 className="text-2xl font-bold text-blue-800 mb-4">
+    <div className="p-8 bg-amber-50 border-2 border-amber-500 rounded-lg">
+      <h1 className="text-2xl font-bold text-amber-800 mb-4">
         🧪 Componente de Prueba Simple
       </h1>
-      <p className="text-blue-700 mb-4">
+      <p className="text-amber-700 mb-4">
         Si puedes ver esto, el routing y el renderizado básico funcionan.
       </p>
       <div className="bg-white p-4 rounded border">

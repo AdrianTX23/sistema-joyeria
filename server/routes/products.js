@@ -47,6 +47,7 @@ router.get('/test', (req, res) => {
 router.get('/', async (req, res) => {
   try {
     console.log('📦 Petición GET /api/products recibida:', req.query);
+    console.log('🔍 Headers de autenticación:', req.headers.authorization);
     
     const { page = 1, limit = 10, search = '', category = '', lowStock = false } = req.query;
     const offset = (page - 1) * limit;
