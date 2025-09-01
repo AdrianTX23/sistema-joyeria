@@ -3,48 +3,95 @@ import React from 'react';
 const Logo = ({ className = "w-8 h-8", showText = true }) => {
   return (
     <div className={`flex items-center ${className}`}>
-      {/* Icono de diamante dorado */}
+      {/* Logo Icon */}
       <div className="relative">
-        <svg 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          className="w-full h-full"
-          style={{ filter: 'none' }} // Forzar que no haya filtros CSS
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 40 40"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="drop-shadow-sm"
         >
-          {/* Diamante principal */}
-          <path 
-            d="M12 2L15.09 8.26L22 12L15.09 15.74L12 22L8.91 15.74L2 12L8.91 8.26L12 2Z" 
-            fill="#F9D664"
+          {/* Fondo circular dorado con gradiente */}
+          <defs>
+            <radialGradient id="goldGradient" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0%" stopColor="#F9D664" />
+              <stop offset="100%" stopColor="#F4CC5A" />
+            </radialGradient>
+          </defs>
+          
+          <circle
+            cx="20"
+            cy="20"
+            r="18"
+            fill="url(#goldGradient)"
+            stroke="#D97706"
+            strokeWidth="1.5"
+          />
+          
+          {/* Anillo de compromiso */}
+          <ellipse
+            cx="20"
+            cy="20"
+            rx="12"
+            ry="8"
+            fill="none"
+            stroke="white"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+          
+          {/* Montura del anillo */}
+          <path
+            d="M20 12L22 16L20 20L18 16L20 12Z"
+            fill="white"
             stroke="#D97706"
             strokeWidth="1"
           />
           
-          {/* Brillo interno */}
-          <path 
-            d="M12 4L14.18 8.5L19 12L14.18 15.5L12 20L9.82 15.5L5 12L9.82 8.5L12 4Z" 
-            fill="#F4CC5A"
+          {/* Piedra preciosa central */}
+          <path
+            d="M20 16L21.5 19L20 22L18.5 19L20 16Z"
+            fill="#FEF3C7"
+            stroke="white"
+            strokeWidth="1"
+          />
+          
+          {/* Brillo de la piedra */}
+          <path
+            d="M20 17L20.5 19L20 21L19.5 19L20 17Z"
+            fill="white"
+            opacity="0.9"
+          />
+          
+          {/* Detalles del anillo */}
+          <circle
+            cx="20"
+            cy="20"
+            r="1"
+            fill="white"
             opacity="0.8"
           />
           
-          {/* Punto central */}
-          <circle cx="12" cy="12" r="1.5" fill="#FCD34D" />
-          
-          {/* Brillo adicional */}
-          <path 
-            d="M12 6L13.5 10L17 12L13.5 14L12 18L10.5 14L7 12L10.5 10L12 6Z" 
-            fill="#FEF3C7"
-            opacity="0.6"
+          {/* Brillo superior */}
+          <circle
+            cx="19"
+            cy="17"
+            r="0.8"
+            fill="white"
+            opacity="0.7"
           />
         </svg>
       </div>
-      
+
       {/* Texto del logo */}
       {showText && (
         <div className="ml-3">
-          <h1 className="text-xl font-bold text-[#F9D664]">
-            Joyería
+          <h1 className="text-xl font-bold text-gray-900 leading-tight">
+            Joyería Elegante
           </h1>
-          <p className="text-xs text-[#F4CC5A] font-medium">
+          <p className="text-xs text-gray-600 leading-tight">
             Sistema de Inventario
           </p>
         </div>
