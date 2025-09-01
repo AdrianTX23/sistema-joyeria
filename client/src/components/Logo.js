@@ -31,13 +31,13 @@ const Logo = ({ className = "w-8 h-8", showText = true }) => {
           {/* Gradientes */}
           <defs>
             <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#F59E0B" />
-              <stop offset="50%" stopColor="#D97706" />
-              <stop offset="100%" stopColor="#B45309" />
+              <stop offset="0%" stopColor="#F9D664" />
+              <stop offset="50%" stopColor="#F4CC5A" />
+              <stop offset="100%" stopColor="#F9D664" />
             </linearGradient>
             <linearGradient id="innerGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FCD34D" />
-              <stop offset="100%" stopColor="#F59E0B" />
+              <stop offset="0%" stopColor="#F9D664" />
+              <stop offset="100%" stopColor="#F4CC5A" />
             </linearGradient>
           </defs>
         </svg>
@@ -46,10 +46,10 @@ const Logo = ({ className = "w-8 h-8", showText = true }) => {
       {/* Texto del logo */}
       {showText && (
         <div className="ml-3">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-amber-600 to-amber-800 bg-clip-text text-transparent">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-[#F9D664] to-[#F4CC5A] bg-clip-text text-transparent">
             Joyería
           </h1>
-          <p className="text-xs text-amber-600 font-medium">
+          <p className="text-xs text-[#F9D664] font-medium">
             Sistema de Inventario
           </p>
         </div>

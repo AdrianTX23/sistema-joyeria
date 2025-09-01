@@ -162,7 +162,7 @@ const Layout = ({ children }) => {
                   to={item.href}
                   className={`group flex items-center px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                     isActive(item.href)
-                      ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-sm'
+                      ? 'bg-[#F9D664]/20 text-gray-800 border border-[#F9D664]/40 shadow-sm'
                       : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                   onClick={() => {
@@ -172,12 +172,12 @@ const Layout = ({ children }) => {
                   }}
                 >
                   <Icon className={`w-5 h-5 mr-3 transition-colors ${
-                    isActive(item.href) ? 'text-amber-600' : 'text-gray-400 group-hover:text-gray-600'
+                    isActive(item.href) ? 'text-[#F9D664]' : 'text-gray-400 group-hover:text-gray-600'
                   }`} />
                   <div className="flex-1">
                     <div className="font-medium">{item.name}</div>
                     <div className={`text-xs transition-colors ${
-                      isActive(item.href) ? 'text-amber-600' : 'text-gray-500 group-hover:text-gray-600'
+                      isActive(item.href) ? 'text-[#F9D664]' : 'text-gray-500 group-hover:text-gray-600'
                     }`}>
                       {item.description}
                     </div>
@@ -190,8 +190,8 @@ const Layout = ({ children }) => {
           {/* User Info */}
           <div className="border-t border-gray-100 p-4">
             <div className="flex items-center">
-              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center mr-3">
-                <User className="w-5 h-5 text-amber-600" />
+              <div className="w-10 h-10 bg-[#F9D664]/20 rounded-full flex items-center justify-center mr-3">
+                <User className="w-5 h-5 text-[#F9D664]" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
@@ -254,8 +254,8 @@ const Layout = ({ children }) => {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors duration-150"
               >
-                              <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-amber-600" />
+                              <div className="w-8 h-8 bg-[#F9D664]/20 rounded-full flex items-center justify-center">
+                <User className="w-4 h-4 text-[#F9D664]" />
               </div>
                 <div className="text-left">
                   <p className="text-sm font-medium text-gray-900">
