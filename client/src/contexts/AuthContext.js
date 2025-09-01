@@ -9,7 +9,7 @@ const initialState = {
   user: null,
   token: sessionStorage.getItem('token') || localStorage.getItem('token'),
   isAuthenticated: false,
-  loading: true,
+  loading: false, // Cambiado a false para evitar pantalla en blanco
   sessionExpired: false,
 };
 
@@ -73,6 +73,7 @@ export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
   console.log('🔍 AuthProvider - Current state:', state);
+  console.log('🔍 AuthProvider - Initial state:', initialState);
 
   // Configurar axios con la URL del backend
   useEffect(() => {
