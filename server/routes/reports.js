@@ -183,103 +183,163 @@ router.get('/inventory', authenticateToken, (req, res) => {
   }
 });
 
-// Export sales to CSV
-router.get('/export/sales', authenticateToken, (req, res) => {
+// Unified export route
+router.get('/export', authenticateToken, (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { type, period, startDate, endDate } = req.query;
     const db = getDatabase();
     
-    let dateFilter = '';
-    let params = [];
-
-    if (startDate && endDate) {
-      dateFilter = 'WHERE DATE(s.created_at) BETWEEN ? AND ?';
-      params = [startDate, endDate];
+    if (!type) {
+      return res.status(400).json({ error: 'Type parameter is required' });
     }
 
-    const query = `
-      SELECT 
-        s.sale_number,
-        s.customer_name,
-        s.customer_email,
-        s.total_amount,
-        s.payment_method,
-        s.created_at,
-        u.full_name as seller_name
-      FROM sales s
-      LEFT JOIN users u ON s.user_id = u.id
-      ${dateFilter}
-      ORDER BY s.created_at DESC
-    `;
+    let dateFilter = '';
+    let params = [];
+    let query = '';
+    let csvHeader = '';
+    let fileName = '';
 
-    db.all(query, params, (err, sales) => {
+    switch (type) {
+      case 'sales':
+        // Date filter for sales
+        if (startDate && endDate) {
+          dateFilter = 'WHERE DATE(s.created_at) BETWEEN ? AND ?';
+          params = [startDate, endDate];
+        } else {
+          // Default period filter
+          switch (period) {
+            case 'week':
+              dateFilter = 'WHERE s.created_at >= DATE("now", "-7 days")';
+              break;
+            case 'month':
+              dateFilter = 'WHERE s.created_at >= DATE("now", "-30 days")';
+              break;
+            case 'quarter':
+              dateFilter = 'WHERE s.created_at >= DATE("now", "-90 days")';
+              break;
+            case 'year':
+              dateFilter = 'WHERE s.created_at >= DATE("now", "-365 days")';
+              break;
+            default:
+              dateFilter = 'WHERE s.created_at >= DATE("now", "-30 days")';
+          }
+        }
+
+        query = `
+          SELECT 
+            s.sale_number,
+            s.customer_name,
+            s.customer_email,
+            s.total_amount,
+            s.payment_method,
+            s.created_at,
+            u.full_name as seller_name
+          FROM sales s
+          LEFT JOIN users u ON s.user_id = u.id
+          ${dateFilter}
+          ORDER BY s.created_at DESC
+        `;
+
+        csvHeader = 'Número de Venta,Cliente,Email,Total,Método de Pago,Fecha,Vendedor\n';
+        fileName = `ventas_${period || 'personalizado'}_${new Date().toISOString().split('T')[0]}.csv`;
+        break;
+
+      case 'inventory':
+        query = `
+          SELECT 
+            p.sku,
+            p.name,
+            p.description,
+            c.name as category,
+            p.stock_quantity,
+            p.min_stock_level,
+            p.price,
+            p.cost,
+            (p.price * p.stock_quantity) as total_value
+          FROM products p
+          LEFT JOIN categories c ON p.category_id = c.id
+          ORDER BY p.name
+        `;
+
+        csvHeader = 'SKU,Nombre,Descripción,Categoría,Stock,Mínimo,Precio,Costo,Valor Total\n';
+        fileName = `inventario_${new Date().toISOString().split('T')[0]}.csv`;
+        break;
+
+      case 'products':
+        query = `
+          SELECT 
+            p.sku,
+            p.name,
+            p.description,
+            c.name as category,
+            p.stock_quantity,
+            p.price,
+            p.cost,
+            p.created_at
+          FROM products p
+          LEFT JOIN categories c ON p.category_id = c.id
+          ORDER BY p.name
+        `;
+
+        csvHeader = 'SKU,Nombre,Descripción,Categoría,Stock,Precio,Costo,Fecha Creación\n';
+        fileName = `productos_${new Date().toISOString().split('T')[0]}.csv`;
+        break;
+
+      case 'categories':
+        query = `
+          SELECT 
+            c.name,
+            COUNT(p.id) as product_count,
+            SUM(COALESCE(si.quantity, 0)) as units_sold,
+            SUM(COALESCE(si.total_price, 0)) as revenue,
+            COUNT(DISTINCT s.id) as sale_count
+          FROM categories c
+          LEFT JOIN products p ON c.id = p.category_id
+          LEFT JOIN sale_items si ON p.id = si.product_id
+          LEFT JOIN sales s ON si.sale_id = s.id
+          GROUP BY c.id, c.name
+          ORDER BY revenue DESC
+        `;
+
+        csvHeader = 'Categoría,Productos,Unidades Vendidas,Ingresos,Total Ventas\n';
+        fileName = `categorias_${new Date().toISOString().split('T')[0]}.csv`;
+        break;
+
+      default:
+        return res.status(400).json({ error: 'Invalid export type' });
+    }
+
+    db.all(query, params, (err, data) => {
       if (err) {
-        console.error('Database error getting sales for export:', err);
+        console.error(`Database error getting ${type} for export:`, err);
         return res.status(500).json({ error: 'Database error' });
       }
 
+      if (!data || data.length === 0) {
+        return res.status(404).json({ error: 'No data found for export' });
+      }
+
       // Generate CSV
-      const csvHeader = 'Sale Number,Customer Name,Customer Email,Total Amount,Payment Method,Date,Seller\n';
-      const csvData = sales.map(sale => 
-        `"${sale.sale_number}","${sale.customer_name || ''}","${sale.customer_email || ''}","${sale.total_amount}","${sale.payment_method}","${sale.created_at}","${sale.seller_name || ''}"`
-      ).join('\n');
+      const csvData = data.map(row => {
+        return Object.values(row).map(value => 
+          `"${value || ''}"`
+        ).join(',');
+      }).join('\n');
 
       const csv = csvHeader + csvData;
 
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=sales-export.csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       res.send(csv);
     });
+
   } catch (error) {
-    console.error('Export sales error:', error);
+    console.error('Export error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Export inventory to CSV
-router.get('/export/inventory', authenticateToken, (req, res) => {
-  try {
-    const db = getDatabase();
-    
-    const query = `
-      SELECT 
-        p.sku,
-        p.name,
-        p.description,
-        c.name as category,
-        p.stock_quantity,
-        p.min_stock_level,
-        p.price,
-        p.cost,
-        (p.price * p.stock_quantity) as total_value
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      ORDER BY p.name
-    `;
 
-    db.all(query, (err, inventory) => {
-      if (err) {
-        console.error('Database error getting inventory for export:', err);
-        return res.status(500).json({ error: 'Database error' });
-      }
-
-      // Generate CSV
-      const csvHeader = 'SKU,Name,Description,Category,Stock Quantity,Min Stock Level,Price,Cost,Total Value\n';
-      const csvData = inventory.map(item => 
-        `"${item.sku}","${item.name}","${item.description || ''}","${item.category || ''}","${item.stock_quantity}","${item.min_stock_level}","${item.price}","${item.cost}","${item.total_value}"`
-      ).join('\n');
-
-      const csv = csvHeader + csvData;
-
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=inventory-export.csv');
-      res.send(csv);
-    });
-  } catch (error) {
-    console.error('Export inventory error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // Get product performance report
 router.get('/products', authenticateToken, (req, res) => {

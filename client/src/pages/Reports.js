@@ -145,7 +145,16 @@ const Reports = () => {
 
       toast.loading('Generando archivo CSV...', { id: 'export' });
       
-      const response = await axios.get(`/api/reports/export?type=${activeTab}&period=${period}`, {
+      let exportUrl = `/api/reports/export?type=${activeTab}`;
+      
+      // Agregar parámetros de fecha según el tipo de reporte
+      if (activeTab === 'sales' && useCustomDates && startDate && endDate) {
+        exportUrl += `&startDate=${startDate}&endDate=${endDate}`;
+      } else {
+        exportUrl += `&period=${period}`;
+      }
+      
+      const response = await axios.get(exportUrl, {
         responseType: 'blob',
         timeout: 30000 // 30 segundos de timeout
       });
@@ -163,7 +172,13 @@ const Reports = () => {
         quarter: 'trimestre',
         year: 'año'
       };
-      const fileName = `reporte_${activeTab}_${periodNames[period] || period}_${date}.csv`;
+      
+      let fileName;
+      if (activeTab === 'sales' && useCustomDates && startDate && endDate) {
+        fileName = `ventas_${startDate}_a_${endDate}.csv`;
+      } else {
+        fileName = `reporte_${activeTab}_${periodNames[period] || period}_${date}.csv`;
+      }
 
       // Crear y descargar el archivo
       const url = window.URL.createObjectURL(new Blob([response.data]));
