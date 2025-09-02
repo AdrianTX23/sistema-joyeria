@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   AlertTriangle,
   BarChart3,
+  Activity,
 } from 'lucide-react';
 import {
   LineChart,
