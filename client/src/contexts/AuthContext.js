@@ -178,9 +178,9 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  const login = async (username, password, rememberMe = false) => {
+  const login = async (usernameOrEmail, password, rememberMe = false) => {
     console.log('🔐 Iniciando proceso de login...', {
-      username,
+      usernameOrEmail,
       password: password ? '***' : 'undefined',
       rememberMe,
       timestamp: new Date().toISOString()
@@ -188,16 +188,18 @@ export const AuthProvider = ({ children }) => {
 
     try {
       dispatch({ type: 'LOGIN_START' });
-      // setLoading(true); // This line was removed from the new_code, so it's removed here.
-      // setError(null); // This line was removed from the new_code, so it's removed here.
 
       console.log('📡 Enviando petición de login...');
       
-      const response = await axios.post('/api/auth/login', {
-        username,
-        password,
-        rememberMe
-      });
+      // Determinar si es username o email
+      const isEmail = usernameOrEmail.includes('@');
+      const payload = isEmail 
+        ? { email: usernameOrEmail, password, rememberMe }
+        : { username: usernameOrEmail, password, rememberMe };
+      
+      console.log('📤 Payload de login:', { ...payload, password: '***' });
+      
+      const response = await axios.post('/api/auth/login', payload);
 
       console.log('✅ Respuesta de login recibida:', {
         status: response.status,

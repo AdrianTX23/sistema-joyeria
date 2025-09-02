@@ -37,15 +37,27 @@ const Login = () => {
       return;
     }
 
+    // Validar formato de email si se está usando email
+    if (useEmail && formData.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        toast.error('Formato de email inválido');
+        return;
+      }
+    }
+
     setLoading(true);
     
     try {
-      await login(
+      const loginResult = await login(
         formData.username || formData.email,
         formData.password,
         formData.rememberMe
       );
-      toast.success('¡Bienvenido al sistema de joyería!');
+      
+      if (loginResult.success) {
+        toast.success('¡Bienvenido al sistema de joyería!');
+      }
     } catch (error) {
       console.error('Login error:', error);
       toast.error(error.response?.data?.error || 'Error al iniciar sesión');

@@ -27,9 +27,11 @@ const authenticateToken = (req, res, next) => {
 // Login route
 router.post('/login', async (req, res) => {
   console.log('🔐 Intento de login recibido:', {
-    username: req.body.username,
-    email: req.body.email,
-    timestamp: new Date().toISOString()
+    username: req.body.username || 'No proporcionado',
+    email: req.body.email || 'No proporcionado',
+    hasPassword: !!req.body.password,
+    timestamp: new Date().toISOString(),
+    body: { ...req.body, password: req.body.password ? '***' : 'undefined' }
   });
 
   try {
@@ -46,8 +48,18 @@ router.post('/login', async (req, res) => {
     }
 
     // Buscar usuario por username o email
-    const searchField = username ? 'username' : 'email';
-    const searchValue = username || email;
+    let searchField, searchValue;
+    
+    if (email) {
+      searchField = 'email';
+      searchValue = email;
+    } else if (username) {
+      searchField = 'username';
+      searchValue = username;
+    } else {
+      console.log('❌ Login fallido: No se proporcionó username ni email');
+      return res.status(400).json({ error: 'Se requiere username o email' });
+    }
     
     console.log(`🔍 Buscando usuario por ${searchField}: ${searchValue}`);
     
