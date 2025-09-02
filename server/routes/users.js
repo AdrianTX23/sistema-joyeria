@@ -69,6 +69,99 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Create new user (for administrators)
+router.post('/', upload.single('profile_image'), async (req, res) => {
+  try {
+    const { username, email, password, fullName, role = 'vendedor', phone, address, bio } = req.body;
+
+    if (!username || !email || !password || !fullName) {
+      return res.status(400).json({ error: 'Todos los campos marcados con * son requeridos' });
+    }
+
+    // Validate role
+    if (!['vendedor', 'administrador', 'inventario'].includes(role)) {
+      return res.status(400).json({ error: 'Rol inválido' });
+    }
+
+    const db = getDatabase();
+    
+    // Check if username or email already exists
+    const existingUser = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT id FROM users WHERE username = ? OR email = ?',
+        [username, email],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'El nombre de usuario o email ya existe' });
+    }
+
+    // Hash password
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Insert new user
+    const insertQuery = `
+      INSERT INTO users (username, email, password, full_name, role, phone, address, bio, profile_image, is_active, created_at) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const profileImagePath = req.file ? req.file.path : null;
+    const now = new Date().toISOString();
+    
+    await new Promise((resolve, reject) => {
+      db.run(insertQuery, [
+        username, 
+        email, 
+        hashedPassword, 
+        fullName, 
+        role, 
+        phone || null, 
+        address || null, 
+        bio || null, 
+        profileImagePath,
+        1, // is_active
+        now // created_at
+      ], function(err) {
+        if (err) reject(err);
+        else resolve(this.lastID);
+      });
+    });
+
+    // Get the created user
+    const newUser = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT id, username, email, role, full_name, phone, address, bio, profile_image, is_active, created_at FROM users WHERE username = ?',
+        [username],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    // Add full URL to profile image
+    if (newUser.profile_image) {
+      newUser.profile_image = `/uploads/profiles/${path.basename(newUser.profile_image)}`;
+    }
+
+    console.log('✅ Usuario creado exitosamente:', newUser.username);
+    
+    res.status(201).json({ 
+      message: 'Usuario creado exitosamente',
+      user: newUser 
+    });
+  } catch (error) {
+    console.error('❌ Error creando usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // Get all users (admin only)
 router.get('/', authenticateToken, requireAdmin, (req, res) => {
   try {

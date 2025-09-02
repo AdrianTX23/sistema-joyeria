@@ -59,7 +59,7 @@ const Users = () => {
         toast.success('Usuario actualizado correctamente');
       } else {
         // Crear nuevo usuario
-        await axios.post('/api/auth/register', userData);
+        await axios.post('/api/users', userData);
         toast.success('Usuario creado correctamente');
       }
       setShowUserModal(false);
@@ -67,7 +67,11 @@ const Users = () => {
       fetchUsers();
     } catch (error) {
       console.error('Error saving user:', error);
-      toast.error('Error al guardar usuario');
+      if (error.response?.data?.error) {
+        toast.error(error.response.data.error);
+      } else {
+        toast.error('Error al guardar usuario');
+      }
     }
   };
 
