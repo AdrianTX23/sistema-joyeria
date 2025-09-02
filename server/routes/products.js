@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const { getDatabase } = require('../database/init');
 const { authenticateToken } = require('./auth');
+const auditSystem = require('../utils/audit');
 
 const router = express.Router();
 
@@ -44,20 +45,18 @@ router.get('/test', (req, res) => {
 });
 
 // Get all products with pagination and filters
-router.get('/', (req, res) => {
+router.get('/', authenticateToken, (req, res) => {
   try {
-    console.log('📦 Petición GET /api/products recibida:', req.query);
-    
-    const { page = 1, limit = 10, search = '', category = '', lowStock = false } = req.query;
+    const { page = 1, limit = 10, search = '', category = '', sortBy = 'name', sortOrder = 'ASC' } = req.query;
     const offset = (page - 1) * limit;
     
     let query = `
       SELECT p.*, c.name as category_name 
       FROM products p 
       LEFT JOIN categories c ON p.category_id = c.id 
-      WHERE 1=1
+      WHERE p.is_deleted = 0
     `;
-    let countQuery = 'SELECT COUNT(*) as total FROM products p WHERE 1=1';
+    let countQuery = 'SELECT COUNT(*) as total FROM products p WHERE p.is_deleted = 0';
     let params = [];
     let countParams = [];
 
@@ -76,44 +75,30 @@ router.get('/', (req, res) => {
       countParams.push(category);
     }
 
-    if (lowStock === 'true') {
-      query += ' AND p.stock_quantity <= p.min_stock_level';
-      countQuery += ' AND p.stock_quantity <= p.min_stock_level';
-    }
-
-    query += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
+    // Validar y sanitizar sortBy y sortOrder
+    const allowedSortFields = ['name', 'sku', 'price', 'stock_quantity', 'created_at'];
+    const allowedSortOrders = ['ASC', 'DESC'];
+    
+    if (!allowedSortFields.includes(sortBy)) sortBy = 'name';
+    if (!allowedSortOrders.includes(sortOrder.toUpperCase())) sortOrder = 'ASC';
+    
+    query += ` ORDER BY p.${sortBy} ${sortOrder} LIMIT ? OFFSET ?`;
     params.push(parseInt(limit), offset);
 
-    console.log('🔍 Ejecutando consulta de conteo:', countQuery, countParams);
-    
     const db = getDatabase();
     
-    // Ejecutar consulta de conteo
     db.get(countQuery, countParams, (err, countResult) => {
       if (err) {
-        console.error('❌ Error en consulta de conteo:', err);
-        return res.status(500).json({ error: 'Error interno del servidor' });
+        console.error('Database error getting products count:', err);
+        return res.status(500).json({ error: 'Database error' });
       }
-      
-      console.log('📊 Resultado de conteo:', countResult);
-      
-      // Ejecutar consulta de productos
-      console.log('🔍 Ejecutando consulta de productos:', query, params);
-      
+
       db.all(query, params, (err, products) => {
         if (err) {
-          console.error('❌ Error en consulta de productos:', err);
-          return res.status(500).json({ error: 'Error interno del servidor' });
+          console.error('Database error getting products:', err);
+          return res.status(500).json({ error: 'Database error' });
         }
-        
-        console.log('📦 Productos obtenidos:', products);
-        console.log('✅ Productos obtenidos:', {
-          count: products.length,
-          total: countResult.total,
-          productsType: typeof products,
-          isArray: Array.isArray(products)
-        });
-        
+
         res.json({
           products,
           pagination: {
@@ -125,10 +110,9 @@ router.get('/', (req, res) => {
         });
       });
     });
-    
   } catch (error) {
-    console.error('❌ Error obteniendo productos:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('Get products error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -136,13 +120,13 @@ router.get('/', (req, res) => {
 router.get('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
-    
     const db = getDatabase();
+    
     db.get(
       `SELECT p.*, c.name as category_name 
        FROM products p 
        LEFT JOIN categories c ON p.category_id = c.id 
-       WHERE p.id = ?`,
+       WHERE p.id = ? AND p.is_deleted = 0`,
       [id],
       (err, product) => {
         if (err) {
@@ -162,7 +146,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 });
 
 // Create new product
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const {
       sku,
@@ -179,48 +163,68 @@ router.post('/', authenticateToken, (req, res) => {
     } = req.body;
 
     if (!sku || !name || !price || !cost) {
-      return res.status(400).json({ error: 'SKU, name, price, and cost are required' });
+      return res.status(400).json({ error: 'SKU, name, price and cost are required' });
     }
 
     const db = getDatabase();
-    db.run(
-      `INSERT INTO products (
-        sku, name, description, category_id, price, cost, 
-        stock_quantity, min_stock_level, weight, dimensions, material
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sku, name, description, category_id, price, cost, stock_quantity || 0, min_stock_level || 5, weight, dimensions, material],
-      function(err) {
-        if (err) {
-          console.error('Database error creating product:', err);
-          if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({ error: 'SKU already exists' });
-          }
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        db.get(
-          `SELECT p.*, c.name as category_name 
-           FROM products p 
-           LEFT JOIN categories c ON p.category_id = c.id 
-           WHERE p.id = ?`,
-          [this.lastID],
-          (err, newProduct) => {
-            if (err) {
-              console.error('Database error getting new product:', err);
-              return res.status(500).json({ error: 'Database error' });
-            }
-            
-            // Sincronizar la base de datos después de crear el producto
-            // syncDatabase(); // This line was removed as per the edit hint
-            
-            res.status(201).json({ 
-              message: 'Product created successfully',
-              product: newProduct 
-            });
-          }
-        );
+    
+    // Verificar que el SKU no exista (incluyendo productos eliminados)
+    db.get('SELECT id FROM products WHERE sku = ?', [sku], async (err, existingProduct) => {
+      if (err) {
+        console.error('Database error checking SKU:', err);
+        return res.status(500).json({ error: 'Database error' });
       }
-    );
+      
+      if (existingProduct) {
+        return res.status(400).json({ error: 'SKU already exists' });
+      }
+
+      // Crear el producto
+      db.run(
+        `INSERT INTO products (
+          sku, name, description, category_id, price, cost, 
+          stock_quantity, min_stock_level, weight, dimensions, material
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [sku, name, description, category_id, price, cost, stock_quantity || 0, min_stock_level || 5, weight, dimensions, material],
+        async function(err) {
+          if (err) {
+            console.error('Database error creating product:', err);
+            return res.status(500).json({ error: 'Database error' });
+          }
+
+          const productId = this.lastID;
+          
+          // Registrar en auditoría
+          try {
+            await auditSystem.logCreate('products', productId, {
+              sku, name, description, category_id, price, cost, stock_quantity, min_stock_level
+            }, req.user.userId, req);
+          } catch (auditError) {
+            console.warn('Audit logging failed:', auditError);
+          }
+
+          // Obtener el producto creado
+          db.get(
+            `SELECT p.*, c.name as category_name 
+             FROM products p 
+             LEFT JOIN categories c ON p.category_id = c.id 
+             WHERE p.id = ?`,
+            [productId],
+            (err, newProduct) => {
+              if (err) {
+                console.error('Database error getting created product:', err);
+                return res.status(500).json({ error: 'Database error' });
+              }
+              
+              res.status(201).json({ 
+                message: 'Product created successfully',
+                product: newProduct 
+              });
+            }
+          );
+        }
+      );
+    });
   } catch (error) {
     console.error('Create product error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -228,7 +232,7 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // Update product
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -246,49 +250,83 @@ router.put('/:id', authenticateToken, (req, res) => {
     } = req.body;
 
     if (!sku || !name || !price || !cost) {
-      return res.status(400).json({ error: 'SKU, name, price, and cost are required' });
+      return res.status(400).json({ error: 'SKU, name, price and cost are required' });
     }
 
     const db = getDatabase();
-    db.run(
-      `UPDATE products SET 
-        sku = ?, name = ?, description = ?, category_id = ?, 
-        price = ?, cost = ?, stock_quantity = ?, min_stock_level = ?, 
-        weight = ?, dimensions = ?, material = ?, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
-      [sku, name, description, category_id, price, cost, stock_quantity, min_stock_level, weight, dimensions, material, id],
-      function(err) {
+    
+    // Obtener valores anteriores para auditoría
+    db.get('SELECT * FROM products WHERE id = ? AND is_deleted = 0', [id], async (err, oldProduct) => {
+      if (err) {
+        console.error('Database error getting old product:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (!oldProduct) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+
+      // Verificar que el SKU no exista en otros productos
+      db.get('SELECT id FROM products WHERE sku = ? AND id != ? AND is_deleted = 0', [sku, id], async (err, existingProduct) => {
         if (err) {
-          console.error('Database error updating product:', err);
-          if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({ error: 'SKU already exists' });
-          }
+          console.error('Database error checking SKU:', err);
           return res.status(500).json({ error: 'Database error' });
         }
-
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'Product not found' });
+        
+        if (existingProduct) {
+          return res.status(400).json({ error: 'SKU already exists' });
         }
 
-        db.get(
-          `SELECT p.*, c.name as category_name 
-           FROM products p 
-           LEFT JOIN categories c ON p.category_id = c.id 
-           WHERE p.id = ?`,
-          [id],
-          (err, updatedProduct) => {
+        // Actualizar el producto
+        db.run(
+          `UPDATE products SET 
+            sku = ?, name = ?, description = ?, category_id = ?, price = ?, cost = ?,
+            stock_quantity = ?, min_stock_level = ?, weight = ?, dimensions = ?, material = ?,
+            updated_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND is_deleted = 0`,
+          [sku, name, description, category_id, price, cost, stock_quantity, min_stock_level, weight, dimensions, material, id],
+          async function(err) {
             if (err) {
-              console.error('Database error getting updated product:', err);
+              console.error('Database error updating product:', err);
               return res.status(500).json({ error: 'Database error' });
             }
-            res.json({ 
-              message: 'Product updated successfully',
-              product: updatedProduct 
-            });
+
+            if (this.changes === 0) {
+              return res.status(404).json({ error: 'Product not found or no changes made' });
+            }
+
+            // Registrar en auditoría
+            try {
+              await auditSystem.logUpdate('products', id, oldProduct, {
+                sku, name, description, category_id, price, cost, stock_quantity, min_stock_level
+              }, req.user.userId, req);
+            } catch (auditError) {
+              console.warn('Audit logging failed:', auditError);
+            }
+
+            // Obtener el producto actualizado
+            db.get(
+              `SELECT p.*, c.name as category_name 
+               FROM products p 
+               LEFT JOIN categories c ON p.category_id = c.id 
+               WHERE p.id = ?`,
+              [id],
+              (err, updatedProduct) => {
+                if (err) {
+                  console.error('Database error getting updated product:', err);
+                  return res.status(500).json({ error: 'Database error' });
+                }
+                
+                res.json({ 
+                  message: 'Product updated successfully',
+                  product: updatedProduct 
+                });
+              }
+            );
           }
         );
-      }
-    );
+      });
+    });
   } catch (error) {
     console.error('Update product error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -356,24 +394,247 @@ router.patch('/:id/stock', authenticateToken, (req, res) => {
   }
 });
 
-// Delete product
-router.delete('/:id', authenticateToken, (req, res) => {
+// Soft delete product (NO ELIMINA DATOS REALES)
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
     const db = getDatabase();
-    db.run('DELETE FROM products WHERE id = ?', [id], function(err) {
+
+    // Obtener el producto antes de marcarlo como eliminado
+    db.get('SELECT * FROM products WHERE id = ? AND is_deleted = 0', [id], async (err, product) => {
       if (err) {
-        console.error('Database error deleting product:', err);
+        console.error('Database error getting product:', err);
         return res.status(500).json({ error: 'Database error' });
       }
-      if (this.changes === 0) {
+      
+      if (!product) {
         return res.status(404).json({ error: 'Product not found' });
       }
-      res.json({ message: 'Product deleted successfully' });
+
+      // Verificar que no tenga ventas activas
+      db.get('SELECT COUNT(*) as count FROM sale_items si JOIN sales s ON si.sale_id = s.id WHERE si.product_id = ? AND s.is_deleted = 0', [id], async (err, salesResult) => {
+        if (err) {
+          console.error('Database error checking sales:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (salesResult.count > 0) {
+          return res.status(400).json({ 
+            error: 'Cannot delete product that has active sales. Consider archiving instead.' 
+          });
+        }
+
+        // Marcar como eliminado (SOFT DELETE)
+        db.run(
+          'UPDATE products SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP, deleted_by = ? WHERE id = ?',
+          [req.user.userId, id],
+          async function(err) {
+            if (err) {
+              console.error('Database error soft deleting product:', err);
+              return res.status(500).json({ error: 'Database error' });
+            }
+
+            if (this.changes === 0) {
+              return res.status(404).json({ error: 'Product not found' });
+            }
+
+            // Registrar en auditoría
+            try {
+              await auditSystem.logSoftDelete('products', id, product, req.user.userId, req);
+            } catch (auditError) {
+              console.warn('Audit logging failed:', auditError);
+            }
+
+            res.json({ 
+              message: 'Product archived successfully (soft deleted)',
+              productId: id,
+              archivedAt: new Date().toISOString()
+            });
+          }
+        );
+      });
     });
   } catch (error) {
-    console.error('Delete product error:', error);
+    console.error('Soft delete product error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Restore soft deleted product
+router.post('/:id/restore', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = getDatabase();
+
+    // Obtener el producto eliminado
+    db.get('SELECT * FROM products WHERE id = ? AND is_deleted = 1', [id], async (err, product) => {
+      if (err) {
+        console.error('Database error getting deleted product:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (!product) {
+        return res.status(404).json({ error: 'Deleted product not found' });
+      }
+
+      // Restaurar el producto
+      db.run(
+        'UPDATE products SET is_deleted = 0, deleted_at = NULL, deleted_by = NULL WHERE id = ?',
+        [id],
+        async function(err) {
+          if (err) {
+            console.error('Database error restoring product:', err);
+            return res.status(500).json({ error: 'Database error' });
+          }
+
+          if (this.changes === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+          }
+
+          // Registrar en auditoría
+          try {
+            await auditSystem.logAction('products', id, 'RESTORE', product, { ...product, is_deleted: 0 }, req.user.userId, req);
+          } catch (auditError) {
+            console.warn('Audit logging failed:', auditError);
+          }
+
+          res.json({ 
+            message: 'Product restored successfully',
+            productId: id,
+            restoredAt: new Date().toISOString()
+          });
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Restore product error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get archived products (soft deleted)
+router.get('/archived/list', authenticateToken, (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
+    
+    const db = getDatabase();
+    
+    const query = `
+      SELECT p.*, c.name as category_name, u.username as deleted_by_user
+      FROM products p 
+      LEFT JOIN categories c ON p.category_id = c.id 
+      LEFT JOIN users u ON p.deleted_by = u.id
+      WHERE p.is_deleted = 1
+      ORDER BY p.deleted_at DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const countQuery = 'SELECT COUNT(*) as total FROM products WHERE is_deleted = 1';
+    
+    db.get(countQuery, (err, countResult) => {
+      if (err) {
+        console.error('Database error getting archived products count:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      db.all(query, [parseInt(limit), offset], (err, products) => {
+        if (err) {
+          console.error('Database error getting archived products:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        res.json({
+          products,
+          pagination: {
+            current: parseInt(page),
+            total: Math.ceil(countResult.total / limit),
+            totalItems: countResult.total,
+            limit: parseInt(limit)
+          }
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Get archived products error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Permanent delete (SOLO PARA ADMINISTRADORES Y SOLO DESPUÉS DE VERIFICACIÓN)
+router.delete('/:id/permanent', authenticateToken, async (req, res) => {
+  try {
+    // Verificar que sea administrador
+    if (req.user.role !== 'administrador') {
+      return res.status(403).json({ error: 'Only administrators can permanently delete products' });
+    }
+
+    const { id } = req.params;
+    const { confirmation, reason } = req.body;
+
+    if (!confirmation || confirmation !== 'PERMANENTLY_DELETE_PRODUCT') {
+      return res.status(400).json({ 
+        error: 'Confirmation required. Send "PERMANENTLY_DELETE_PRODUCT" to confirm.' 
+      });
+    }
+
+    if (!reason || reason.length < 10) {
+      return res.status(400).json({ 
+        error: 'Reason for permanent deletion is required (minimum 10 characters)' 
+      });
+    }
+
+    const db = getDatabase();
+
+    // Verificar que el producto esté soft deleted
+    db.get('SELECT * FROM products WHERE id = ? AND is_deleted = 1', [id], async (err, product) => {
+      if (err) {
+        console.error('Database error getting product:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (!product) {
+        return res.status(404).json({ error: 'Soft deleted product not found' });
+      }
+
+      // Verificar que no tenga ventas históricas
+      db.get('SELECT COUNT(*) as count FROM sale_items WHERE product_id = ?', [id], async (err, salesResult) => {
+        if (err) {
+          console.error('Database error checking sales history:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (salesResult.count > 0) {
+          return res.status(400).json({ 
+            error: 'Cannot permanently delete product with sales history. Keep it archived.' 
+          });
+        }
+
+        // Crear backup antes de eliminar permanentemente
+        try {
+          await auditSystem.logAction('products', id, 'PERMANENT_DELETE', product, null, req.user.userId, req);
+        } catch (auditError) {
+          console.warn('Audit logging failed:', auditError);
+        }
+
+        // Eliminar permanentemente
+        db.run('DELETE FROM products WHERE id = ?', [id], function(err) {
+          if (err) {
+            console.error('Database error permanently deleting product:', err);
+            return res.status(500).json({ error: 'Database error' });
+          }
+
+          res.json({ 
+            message: 'Product permanently deleted',
+            productId: id,
+            deletedAt: new Date().toISOString(),
+            reason: reason
+          });
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Permanent delete product error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

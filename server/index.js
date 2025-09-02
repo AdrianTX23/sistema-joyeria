@@ -18,6 +18,9 @@ const backupRoutes = require('./routes/backup');
 const { initDatabase, closeDatabase } = require('./database/init');
 const { initPostgresDatabase, closePostgresDatabase } = require('./database/postgres-init');
 
+// Import backup system
+const backupManager = require('./utils/backup-manager');
+
 // Función para detectar qué base de datos usar
 async function initializeDatabase() {
   // Verificar si DATABASE_URL está configurado
@@ -116,6 +119,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/backup-admin', require('./routes/backup-admin'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -252,6 +256,10 @@ async function startServer() {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 API available at http://localhost:${PORT}/api`);
       console.log('🎉 Servidor iniciado correctamente');
+      
+      // Iniciar sistema de backup automático
+      console.log('💾 Starting automatic backup system...');
+      backupManager.start();
     });
 
     // Configurar timeout para conexiones
