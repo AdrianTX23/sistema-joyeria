@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { X, User, Camera, Upload, Trash2, Eye, EyeOff } from 'lucide-react';
+import { X, User, Camera, Trash2, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const UserModal = ({ isOpen, onClose, onSuccess, user = null }) => {
+const UserModal = ({ user = null, onClose, onSave }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -48,7 +47,7 @@ const UserModal = ({ isOpen, onClose, onSuccess, user = null }) => {
       setImagePreview(null);
       setImageFile(null);
     }
-  }, [user, isOpen]);
+  }, [user]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -108,25 +107,9 @@ const UserModal = ({ isOpen, onClose, onSuccess, user = null }) => {
         submitData.append('profile_image', imageFile);
       }
 
-      if (user) {
-        // Actualizar usuario
-        await axios.put(`/api/users/${user.id}`, submitData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        toast.success('Usuario actualizado exitosamente');
-      } else {
-        // Crear nuevo usuario
-        await axios.post('/api/auth/register', submitData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        toast.success('Usuario creado exitosamente');
-      }
-      onSuccess();
-      onClose();
+      // Llamar a la función onSave con los datos
+      await onSave(submitData);
+      
     } catch (error) {
       console.error('Error saving user:', error);
       toast.error(error.response?.data?.error || 'Error al guardar usuario');
@@ -134,8 +117,6 @@ const UserModal = ({ isOpen, onClose, onSuccess, user = null }) => {
       setLoading(false);
     }
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -235,7 +216,9 @@ const UserModal = ({ isOpen, onClose, onSuccess, user = null }) => {
                 required
               />
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Nombre Completo *
@@ -306,6 +289,7 @@ const UserModal = ({ isOpen, onClose, onSuccess, user = null }) => {
               >
                 <option value="vendedor">Vendedor</option>
                 <option value="administrador">Administrador</option>
+                <option value="inventario">Inventario</option>
               </select>
             </div>
 

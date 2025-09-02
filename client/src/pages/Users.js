@@ -51,6 +51,31 @@ const Users = () => {
     }
   };
 
+  const handleSaveUser = async (userData) => {
+    try {
+      if (selectedUser) {
+        // Actualizar usuario existente
+        await axios.put(`/api/users/${selectedUser.id}`, userData);
+        toast.success('Usuario actualizado correctamente');
+      } else {
+        // Crear nuevo usuario
+        await axios.post('/api/auth/register', userData);
+        toast.success('Usuario creado correctamente');
+      }
+      setShowUserModal(false);
+      setSelectedUser(null);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error saving user:', error);
+      toast.error('Error al guardar usuario');
+    }
+  };
+
+  const handleAddUser = () => {
+    setSelectedUser(null); // Asegurar que no hay usuario seleccionado
+    setShowUserModal(true);
+  };
+
   const handleEdit = (user) => {
     setSelectedUser(user);
     setShowUserModal(true);
@@ -66,24 +91,6 @@ const Users = () => {
         console.error('Error deleting user:', error);
         toast.error('Error al eliminar usuario');
       }
-    }
-  };
-
-  const handleSaveUser = async (userData) => {
-    try {
-      if (selectedUser) {
-        await axios.put(`/api/users/${selectedUser.id}`, userData);
-        toast.success('Usuario actualizado correctamente');
-      } else {
-        await axios.post('/api/users', userData);
-        toast.success('Usuario creado correctamente');
-      }
-      setShowUserModal(false);
-      setSelectedUser(null);
-      fetchUsers();
-    } catch (error) {
-      console.error('Error saving user:', error);
-      toast.error('Error al guardar usuario');
     }
   };
 
@@ -183,7 +190,7 @@ const Users = () => {
               </button>
               
               <button
-                onClick={() => setShowUserModal(true)}
+                onClick={handleAddUser}
                 className="inline-flex items-center px-4 lg:px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 rounded-lg font-medium text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-sm lg:text-base"
               >
                 <UserPlus className="w-4 h-4 mr-2" />
