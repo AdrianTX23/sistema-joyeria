@@ -1,10 +1,47 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { getDatabase } = require('../database/init');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Multer configuration for profile image uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads/profiles');
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename with timestamp
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  // Accept only image files
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
 
 // Middleware to authenticate JWT token
 const authenticateToken = (req, res, next) => {
@@ -128,13 +165,13 @@ router.post('/login', async (req, res) => {
 });
 
 // Register route (only for administrators)
-router.post('/register', authenticateToken, async (req, res) => {
+router.post('/register', authenticateToken, upload.single('profile_image'), async (req, res) => {
   try {
     if (req.user.role !== 'administrador') {
       return res.status(403).json({ error: 'Only administrators can create new users' });
     }
 
-    const { username, email, password, fullName, role = 'vendedor' } = req.body;
+    const { username, email, password, fullName, role = 'vendedor', phone, address, bio } = req.body;
 
     if (!username || !email || !password || !fullName) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -148,19 +185,32 @@ router.post('/register', authenticateToken, async (req, res) => {
 
     const db = getDatabase();
     await new Promise((resolve, reject) => {
-      db.run(
-        'INSERT INTO users (username, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)',
-        [username, email, hashedPassword, fullName, role],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
+      const insertQuery = `
+        INSERT INTO users (username, email, password, full_name, role, phone, address, bio, profile_image) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      const profileImagePath = req.file ? req.file.path : null;
+      
+      db.run(insertQuery, [
+        username, 
+        email, 
+        hashedPassword, 
+        fullName, 
+        role, 
+        phone || null, 
+        address || null, 
+        bio || null, 
+        profileImagePath
+      ], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
     });
 
     const newUser = await new Promise((resolve, reject) => {
       db.get(
-        'SELECT id, username, email, role, full_name FROM users WHERE username = ?',
+        'SELECT id, username, email, role, full_name, phone, address, bio, profile_image FROM users WHERE username = ?',
         [username],
         (err, row) => {
           if (err) reject(err);
@@ -168,6 +218,11 @@ router.post('/register', authenticateToken, async (req, res) => {
         }
       );
     });
+
+    // Add full URL to profile image
+    if (newUser.profile_image) {
+      newUser.profile_image = `/uploads/profiles/${path.basename(newUser.profile_image)}`;
+    }
 
     res.status(201).json({ 
       message: 'User created successfully',

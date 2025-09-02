@@ -1,10 +1,47 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { getDatabase } = require('../database/init');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Multer configuration for profile image uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads/profiles');
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename with timestamp
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  // Accept only image files
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -38,7 +75,7 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
     const { page = 1, limit = 10, search = '', role = '' } = req.query;
     const offset = (page - 1) * limit;
     
-    let query = 'SELECT id, username, email, role, full_name, created_at, updated_at FROM users WHERE 1=1';
+    let query = 'SELECT id, username, email, role, full_name, phone, address, bio, profile_image, created_at, updated_at FROM users WHERE 1=1';
     let countQuery = 'SELECT COUNT(*) as total FROM users WHERE 1=1';
     let params = [];
     let countParams = [];
@@ -75,6 +112,12 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
 
+        // Add full URL to profile images
+        users = users.map(user => ({
+          ...user,
+          profile_image: user.profile_image ? `/uploads/profiles/${path.basename(user.profile_image)}` : null
+        }));
+
         res.json({
           users,
           pagination: {
@@ -99,7 +142,7 @@ router.get('/:id', authenticateToken, requireAdmin, (req, res) => {
     const db = getDatabase();
     
     db.get(
-      'SELECT id, username, email, role, full_name, created_at, updated_at FROM users WHERE id = ?',
+      'SELECT id, username, email, role, full_name, phone, address, bio, profile_image, created_at, updated_at FROM users WHERE id = ?',
       [id],
       (err, user) => {
         if (err) {
@@ -109,6 +152,12 @@ router.get('/:id', authenticateToken, requireAdmin, (req, res) => {
         if (!user) {
           return res.status(404).json({ error: 'User not found' });
         }
+        
+        // Add full URL to profile image
+        if (user.profile_image) {
+          user.profile_image = `/uploads/profiles/${path.basename(user.profile_image)}`;
+        }
+        
         res.json({ user });
       }
     );
@@ -119,13 +168,13 @@ router.get('/:id', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Update user (admin only)
-router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, upload.single('profile_image'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, email, fullName, role } = req.body;
+    const { username, email, fullName, role, phone, address, bio } = req.body;
 
     if (!username || !email || !fullName || !role) {
-      return res.status(400).json({ error: 'All fields are required' });
+      return res.status(400).json({ error: 'Required fields are missing' });
     }
 
     if (role !== 'vendedor' && role !== 'administrador') {
@@ -134,10 +183,39 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     const db = getDatabase();
     
-    db.run(
-      'UPDATE users SET username = ?, email = ?, full_name = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [username, email, fullName, role, id],
-      function(err) {
+    // First, get the current user to check if we need to delete old profile image
+    db.get('SELECT profile_image FROM users WHERE id = ?', [id], (err, currentUser) => {
+      if (err) {
+        console.error('Database error getting current user:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (!currentUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Handle profile image
+      let profileImagePath = currentUser.profile_image;
+      if (req.file) {
+        // Delete old profile image if it exists
+        if (currentUser.profile_image) {
+          const oldImagePath = path.join(__dirname, '..', currentUser.profile_image);
+          if (fs.existsSync(oldImagePath)) {
+            fs.unlinkSync(oldImagePath);
+          }
+        }
+        profileImagePath = req.file.path;
+      }
+
+      // Update user with new data
+      const updateQuery = `
+        UPDATE users 
+        SET username = ?, email = ?, full_name = ?, role = ?, phone = ?, address = ?, bio = ?, 
+            profile_image = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `;
+      
+      db.run(updateQuery, [username, email, fullName, role, phone || null, address || null, bio || null, profileImagePath, id], function(err) {
         if (err) {
           console.error('Database error updating user:', err);
           if (err.message.includes('UNIQUE constraint failed')) {
@@ -150,22 +228,29 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
           return res.status(404).json({ error: 'User not found' });
         }
 
+        // Get updated user
         db.get(
-          'SELECT id, username, email, role, full_name, created_at, updated_at FROM users WHERE id = ?',
+          'SELECT id, username, email, role, full_name, phone, address, bio, profile_image, created_at, updated_at FROM users WHERE id = ?',
           [id],
           (err, updatedUser) => {
             if (err) {
               console.error('Database error getting updated user:', err);
               return res.status(500).json({ error: 'Database error' });
             }
+            
+            // Add full URL to profile image
+            if (updatedUser.profile_image) {
+              updatedUser.profile_image = `/uploads/profiles/${path.basename(updatedUser.profile_image)}`;
+            }
+            
             res.json({ 
               message: 'User updated successfully',
               user: updatedUser 
             });
           }
         );
-      }
-    );
+      });
+    });
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -184,15 +269,36 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
 
     const db = getDatabase();
     
-    db.run('DELETE FROM users WHERE id = ?', [id], function(err) {
+    // First, get the user to delete their profile image
+    db.get('SELECT profile_image FROM users WHERE id = ?', [id], (err, user) => {
       if (err) {
-        console.error('Database error deleting user:', err);
+        console.error('Database error getting user for deletion:', err);
         return res.status(500).json({ error: 'Database error' });
       }
-      if (this.changes === 0) {
+      
+      if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
-      res.json({ message: 'User deleted successfully' });
+
+      // Delete profile image if it exists
+      if (user.profile_image) {
+        const imagePath = path.join(__dirname, '..', user.profile_image);
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+      }
+
+      // Delete user from database
+      db.run('DELETE FROM users WHERE id = ?', [id], function(err) {
+        if (err) {
+          console.error('Database error deleting user:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ message: 'User deleted successfully' });
+      });
     });
   } catch (error) {
     console.error('Delete user error:', error);
@@ -247,7 +353,7 @@ router.get('/stats/summary', authenticateToken, requireAdmin, (req, res) => {
 
     // Get recent users
     const recentUsersQuery = `
-      SELECT id, username, email, role, full_name, created_at
+      SELECT id, username, email, role, full_name, profile_image, created_at
       FROM users
       ORDER BY created_at DESC
       LIMIT 5
@@ -264,6 +370,12 @@ router.get('/stats/summary', authenticateToken, requireAdmin, (req, res) => {
           console.error('Database error getting recent users:', err);
           return res.status(500).json({ error: 'Database error' });
         }
+
+        // Add full URLs to profile images
+        recentUsers = recentUsers.map(user => ({
+          ...user,
+          profile_image: user.profile_image ? `/uploads/profiles/${path.basename(user.profile_image)}` : null
+        }));
 
         const totalUsers = roleStats.reduce((sum, stat) => sum + stat.count, 0);
         const adminCount = roleStats.find(stat => stat.role === 'administrador')?.count || 0;
