@@ -22,6 +22,7 @@ import {
   Bar,
 } from 'recharts';
 import LoadingSpinner from '../components/LoadingSpinner';
+import DateTimeDisplay from '../components/DateTimeDisplay';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -158,6 +159,44 @@ const Dashboard = () => {
           icon={AlertTriangle}
           color="warning"
         />
+      </div>
+
+      {/* Reloj y Calendario en Tiempo Real */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <DateTimeDisplay />
+        </div>
+        
+        {/* Información del Sistema */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <Activity className="w-5 h-5 text-blue-500 mr-2" />
+            Estado del Sistema
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Última Actualización:</span>
+              <span className="text-sm font-medium text-gray-800">
+                {new Date().toLocaleTimeString('es-ES')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Estado:</span>
+              <span className="flex items-center text-green-600">
+                <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                Operativo
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Base de Datos:</span>
+              <span className="text-sm font-medium text-gray-800">Conectada</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Backup:</span>
+              <span className="text-sm font-medium text-gray-800">Automático</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Row */}

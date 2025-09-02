@@ -18,6 +18,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import Logo from './Logo';
+import MiniClock from './MiniClock';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -246,6 +247,11 @@ const Layout = ({ children }) => {
               <span className="ml-3 text-sm text-gray-500">
                 {currentPage.description}
               </span>
+            </div>
+            
+            {/* Mini Reloj en Tiempo Real */}
+            <div className="flex items-center space-x-4">
+              <MiniClock showSeconds={false} showDate={true} compact={false} />
             </div>
 
             {/* Desktop User Menu */}
